@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+python-multipart
+itsdangerous
+apscheduler
+smartapi-python
+pyotp
+pandas
+requests
+logzero
+websocket-client

@@ -1,0 +1,986 @@
+<div id="app-root"></div>
+<style>
+  :root{
+    --bg: #0D1117;
+    --panel: #151B23;
+    --panel-2: #1B2330;
+    --border: #2A323C;
+    --text: #E6EDF3;
+    --muted: #8B98A5;
+    --accent: #D4A72C;
+    --accent-soft: rgba(212,167,44,0.14);
+    --good: #3FB950;
+    --good-soft: rgba(63,185,80,0.14);
+    --bad: #F85149;
+    --bad-soft: rgba(248,81,73,0.14);
+    --watch: #58A6FF;
+    --watch-soft: rgba(88,166,255,0.14);
+    --radius: 6px;
+    --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    --font-head: Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+    --font-mono: "SF Mono", "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  *{ box-sizing:border-box; }
+  #app-root{
+    background:var(--bg); color:var(--text); font-family:var(--font-body);
+    min-height:100vh; font-size:13px; line-height:1.5;
+  }
+  .num{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
+  .topbar{
+    display:flex; align-items:center; gap:16px; padding:14px 20px;
+    border-bottom:1px solid var(--border); background:var(--panel);
+    position:sticky; top:0; z-index:20; flex-wrap:wrap;
+  }
+  .brand{ display:flex; align-items:baseline; gap:10px; margin-right:auto; }
+  .brand h1{ font-family:var(--font-head); font-size:19px; font-weight:600; margin:0; letter-spacing:0.2px; }
+  .brand .sub{ color:var(--muted); font-size:12px; }
+  .regime-badge{
+    display:flex; align-items:center; gap:8px; padding:6px 12px; border-radius:999px;
+    border:1px solid var(--border); font-size:12px; background:var(--panel-2);
+  }
+  .dot{ width:7px; height:7px; border-radius:50%; }
+  .btn{
+    background:var(--panel-2); color:var(--text); border:1px solid var(--border);
+    border-radius:var(--radius); padding:7px 13px; font-size:12.5px; cursor:pointer;
+    font-family:var(--font-body); transition:border-color .15s, background .15s;
+  }
+  .btn:hover{ border-color:#3d4754; background:#20293a; }
+  .btn-accent{ background:var(--accent); color:#241B03; border-color:var(--accent); font-weight:600; }
+  .btn-accent:hover{ background:#e3b53a; }
+  .btn-ghost{ background:transparent; border-color:transparent; color:var(--muted); }
+  .btn-ghost:hover{ background:var(--panel-2); color:var(--text); }
+  .btn-danger{ color:var(--bad); }
+
+  .subbar{
+    display:flex; gap:22px; flex-wrap:wrap; align-items:flex-end; padding:12px 20px;
+    border-bottom:1px solid var(--border); background:#10151C;
+  }
+  .field{ display:flex; flex-direction:column; gap:4px; }
+  .field label{ font-size:10.5px; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); }
+  .field input, .field select{
+    background:var(--panel-2); border:1px solid var(--border); color:var(--text);
+    border-radius:4px; padding:5px 8px; font-size:12.5px; width:100px; font-family:var(--font-mono);
+  }
+  .field select{ font-family:var(--font-body); width:auto; }
+  .field input:focus, .field select:focus{ outline:none; border-color:var(--accent); }
+
+  .main{ padding:18px 20px 60px; max-width:1500px; margin:0 auto; }
+  .summary-row{ display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
+  .summary-card{
+    flex:1; min-width:120px; background:var(--panel); border:1px solid var(--border);
+    border-radius:var(--radius); padding:12px 14px;
+  }
+  .summary-card .n{ font-family:var(--font-mono); font-size:22px; font-weight:600; }
+  .summary-card .l{ color:var(--muted); font-size:11px; margin-top:2px; }
+
+  table{ width:100%; border-collapse:collapse; background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+  thead th{
+    text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:0.4px;
+    color:var(--muted); padding:10px 12px; border-bottom:1px solid var(--border); cursor:pointer; white-space:nowrap;
+  }
+  thead th:hover{ color:var(--text); }
+  tbody td{ padding:10px 12px; border-bottom:1px solid var(--border); vertical-align:middle; }
+  tbody tr:last-child td{ border-bottom:none; }
+  tbody tr{ cursor:pointer; transition:background .1s; }
+  tbody tr:hover{ background:#1A212C; }
+  .ticker-cell .t{ font-weight:600; }
+  .ticker-cell .s{ color:var(--muted); font-size:11px; }
+  .score-pill{
+    display:inline-block; min-width:34px; text-align:center; padding:3px 7px; border-radius:4px;
+    font-family:var(--font-mono); font-size:12px; font-weight:600;
+  }
+  .score-exceptional{ background:rgba(63,185,80,.22); color:#63e378; }
+  .score-strong{ background:var(--good-soft); color:var(--good); }
+  .score-watchlist{ background:var(--watch-soft); color:var(--watch); }
+  .score-weak{ background:rgba(212,167,44,.16); color:var(--accent); }
+  .score-avoid{ background:var(--bad-soft); color:var(--bad); }
+  .action-badge{
+    display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:999px;
+    font-size:11px; font-weight:600; letter-spacing:0.2px;
+  }
+  .action-buy{ background:var(--good-soft); color:var(--good); }
+  .action-pullback{ background:var(--watch-soft); color:var(--watch); }
+  .action-watch{ background:rgba(212,167,44,.16); color:var(--accent); }
+  .action-avoid{ background:var(--bad-soft); color:var(--bad); }
+  .rowflag{ color:var(--bad); font-size:11px; margin-left:6px; }
+  .empty-state{ text-align:center; padding:60px 20px; color:var(--muted); }
+  .empty-state h3{ color:var(--text); font-family:var(--font-head); font-weight:600; font-size:17px; margin-bottom:6px;}
+
+  .overlay{
+    position:fixed; inset:0; background:rgba(4,6,9,0.6); z-index:40; display:none;
+  }
+  .overlay.show{ display:block; }
+  .drawer{
+    position:fixed; top:0; right:0; height:100vh; width:min(560px, 96vw); background:var(--panel);
+    border-left:1px solid var(--border); z-index:50; transform:translateX(100%); transition:transform .22s ease;
+    display:flex; flex-direction:column;
+  }
+  .drawer.show{ transform:translateX(0); }
+  .drawer-head{ padding:16px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; }
+  .drawer-head h2{ font-family:var(--font-head); font-size:17px; margin:0; flex:1; }
+  .drawer-body{ padding:16px 20px; overflow-y:auto; flex:1; }
+  .tabs{ display:flex; gap:2px; border-bottom:1px solid var(--border); margin:0 -20px 16px; padding:0 20px; flex-wrap:wrap; }
+  .tab{ padding:9px 12px; font-size:12px; color:var(--muted); cursor:pointer; border-bottom:2px solid transparent; }
+  .tab.active{ color:var(--accent); border-bottom-color:var(--accent); }
+  .tab-panel{ display:none; }
+  .tab-panel.active{ display:block; }
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:10px 14px; }
+  .grid3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px 14px; }
+  .fgroup{ display:flex; flex-direction:column; gap:4px; margin-bottom:2px; }
+  .fgroup label{ font-size:10.5px; color:var(--muted); }
+  .fgroup input, .fgroup select, .fgroup textarea{
+    background:var(--panel-2); border:1px solid var(--border); color:var(--text);
+    border-radius:4px; padding:6px 8px; font-size:12.5px; width:100%; font-family:var(--font-mono);
+  }
+  .fgroup select, .fgroup textarea{ font-family:var(--font-body); }
+  .fgroup textarea{ resize:vertical; min-height:52px; }
+  .fgroup input:focus, .fgroup select:focus, .fgroup textarea:focus{ outline:none; border-color:var(--accent); }
+  .section-label{ font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--accent); margin:18px 0 8px; }
+  .section-label:first-child{ margin-top:0; }
+  .scoreboard{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+  .scoreboard .sb-item{ background:var(--panel-2); border:1px solid var(--border); border-radius:6px; padding:8px 12px; min-width:90px; }
+  .scoreboard .sb-item .v{ font-family:var(--font-mono); font-size:16px; font-weight:600; }
+  .scoreboard .sb-item .k{ font-size:10px; color:var(--muted); }
+  .flag-row{ display:flex; align-items:center; justify-content:space-between; padding:7px 0; border-bottom:1px solid var(--border); font-size:12.5px; }
+  .flag-row:last-child{ border-bottom:none; }
+  .toggle{ position:relative; width:36px; height:20px; }
+  .toggle input{ opacity:0; width:100%; height:100%; margin:0; position:absolute; cursor:pointer; }
+  .toggle .track{ position:absolute; inset:0; background:var(--border); border-radius:999px; transition:background .15s; }
+  .toggle .thumb{ position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:var(--text); transition:transform .15s; }
+  .toggle input:checked + .track{ background:var(--bad); }
+  .toggle input:checked ~ .thumb{ transform:translateX(16px); }
+  .catalyst-block{ border:1px solid var(--border); border-radius:6px; padding:10px; margin-bottom:10px; }
+  .verdict-box{ background:var(--panel-2); border:1px solid var(--border); border-radius:6px; padding:12px; margin-bottom:16px; }
+  .verdict-box .action{ font-size:14px; font-weight:700; margin-bottom:6px; }
+  .verdict-box .row{ display:flex; justify-content:space-between; font-size:12px; padding:2px 0; color:var(--muted); }
+  .verdict-box .row b{ color:var(--text); font-family:var(--font-mono); }
+  .footer-note{ margin-top:24px; padding-top:16px; border-top:1px solid var(--border); color:var(--muted); font-size:11.5px; line-height:1.6; }
+  .weight-row{ display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  .weight-row .wlabel{ width:150px; font-size:12px; }
+  .weight-row input[type=range]{ flex:1; accent-color:var(--accent); }
+  .weight-row .wval{ width:40px; text-align:right; font-family:var(--font-mono); font-size:12px; }
+  .weight-total{ font-size:12px; margin-top:6px; padding:6px 10px; border-radius:4px; }
+  .weight-total.ok{ background:var(--good-soft); color:var(--good); }
+  .weight-total.bad{ background:var(--bad-soft); color:var(--bad); }
+  .toast{
+    position:fixed; bottom:18px; left:50%; transform:translateX(-50%) translateY(20px); opacity:0;
+    background:var(--panel-2); border:1px solid var(--border); color:var(--text); padding:9px 16px;
+    border-radius:6px; font-size:12.5px; z-index:60; transition:opacity .2s, transform .2s; pointer-events:none;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+  @media (max-width:720px){
+    .grid2, .grid3{ grid-template-columns:1fr; }
+    table{ display:block; overflow-x:auto; }
+  }
+</style>
+
+<script>
+(function(){
+
+// ============================== SCORING ENGINE ==============================
+function bqScore(f){
+  const roceP = f.roce<8?0:f.roce<12?1:f.roce<18?2:f.roce<25?3:4;
+  const roeP = f.roe<10?0:f.roe<15?1:f.roe<20?2:3;
+  const marginP = f.marginChgBps>150?3:f.marginChgBps>0?2:f.marginChgBps>-100?1:0;
+  const revConsP = (f.revCagr3>10 && f.revCagr5>10)?2:(f.revCagr3>0 && f.revCagr5>0)?1:0;
+  const epsConsP = (f.epsCagr3>10 && f.epsCagr5>10)?2:(f.epsCagr3>0 && f.epsCagr5>0)?1:0;
+  const cfoPat = f.pat?f.cfo/f.pat:0, fcfPat = f.pat?f.fcf/f.pat:0;
+  const fcfGenP = (cfoPat>0.8 && fcfPat>0.6 && f.fcf>0)?3:(cfoPat>0.5 && f.fcf>0)?2:(f.fcf>0)?1:0;
+  const debtQP = (f.de<0.5 && f.intCov>6)?2:(f.de<1 && f.intCov>3)?1:0;
+  const promoQ = (f.promoterHold>=40 && f.promoterPledge===0)?1:(f.promoterHold>=40 && f.promoterPledge<5)?0.5:0;
+  return round1((roceP+roeP+marginP+revConsP+epsConsP+fcfGenP+debtQP+promoQ)/20*100);
+}
+function growthScore(f){
+  const revG = f.revCagr3<5?0:f.revCagr3<10?1:f.revCagr3<15?2:f.revCagr3<20?3:4;
+  const epsG = f.epsCagr3<5?0:f.epsCagr3<12?1:f.epsCagr3<20?2:f.epsCagr3<30?3:4;
+  const margExp = f.marginChgBps<0?0:f.marginChgBps<50?1:f.marginChgBps<150?2:f.marginChgBps<300?3:4;
+  const qoqG = f.qoqRev<0?0:f.qoqRev<5?1:f.qoqRev<10?2:f.qoqRev<15?3:4;
+  return round1((revG+epsG+margExp+qoqG)/16*100);
+}
+function balanceSheetScore(f){
+  const deP = f.de<0.3?4:f.de<0.6?3:f.de<1?2:f.de<1.5?1:0;
+  const icP = f.intCov>10?4:f.intCov>6?3:f.intCov>3?2:f.intCov>1.5?1:0;
+  const crP = f.currentRatio>2?4:f.currentRatio>1.5?3:f.currentRatio>1.2?2:f.currentRatio>1?1:0;
+  return round1((deP+icP+crP)/12*100);
+}
+function cashFlowScore(f){
+  const cfoPat = f.pat?f.cfo/f.pat:0, fcfPat = f.pat?f.fcf/f.pat:0;
+  const cfoP = cfoPat>1?4:cfoPat>0.8?3:cfoPat>0.5?2:cfoPat>0.2?1:0;
+  const fcfP = fcfPat>0.8?4:fcfPat>0.5?3:fcfPat>0.2?2:fcfPat>0?1:0;
+  return round1((cfoP+fcfP)/8*100);
+}
+function valuationScore(v){
+  if(!v.pe || !v.medianPE || !v.sectorPE) return null;
+  const histPrem = (v.pe/v.medianPE - 1) * 100;
+  const secPrem = (v.pe/v.sectorPE - 1) * 100;
+  const histP = histPrem<-20?4:histPrem<0?3:histPrem<20?2:histPrem<50?1:0;
+  const secP = secPrem<-20?4:secPrem<0?3:secPrem<20?2:secPrem<50?1:0;
+  const pegP = v.peg<1?4:v.peg<1.5?3:v.peg<2?2:v.peg<3?1:0;
+  const fcfyP = v.fcfYield>6?4:v.fcfYield>4?3:v.fcfYield>2?2:v.fcfYield>0?1:0;
+  return round1((histP+secP+pegP+fcfyP)/16*100);
+}
+function technicalSetupScore(t){
+  const rsiP = (t.rsi>=45&&t.rsi<=65)?4:(t.rsi>65&&t.rsi<=75)?2:(t.rsi>=35&&t.rsi<45)?2:(t.rsi>75)?1:(t.rsi<35)?1:0;
+  const macdP = t.macd>0?4:t.macd>-1?2:0;
+  const adxP = t.adx>25?4:t.adx>20?3:t.adx>15?2:t.adx>10?1:0;
+  const brkP = t.breakout?4:0;
+  return round1((rsiP+macdP+adxP+brkP)/16*100);
+}
+function relStrength(t, nifty12){ return t.ret12m - nifty12; }
+function momentumScore(t, nifty12){
+  const rs12 = relStrength(t, nifty12);
+  const ret12P = t.ret12m>40?4:t.ret12m>25?3:t.ret12m>10?2:t.ret12m>0?1:0;
+  const ret6P = t.ret6m>25?4:t.ret6m>15?3:t.ret6m>5?2:t.ret6m>0?1:0;
+  const maP = (t.cmp>t.dma20&&t.dma20>t.dma50&&t.dma50>t.dma100&&t.dma100>t.dma200)?4:
+              (t.cmp>t.dma20&&t.cmp>t.dma200)?2:(t.cmp>t.dma200)?1:0;
+  const rsP = rs12>25?4:rs12>15?3:rs12>5?2:rs12>0?1:0;
+  return round1((ret12P+ret6P+maP+rsP)/16*100);
+}
+function relativeStrengthScore(t, nifty12){
+  const rs12 = relStrength(t, nifty12);
+  return rs12>30?100:rs12>20?85:rs12>10?70:rs12>0?55:rs12>-10?35:15;
+}
+function volumeScore(t){
+  const ratio = t.avgVol?t.vol/t.avgVol:0;
+  return ratio>2?100:ratio>1.5?80:ratio>1.2?60:ratio>1?40:20;
+}
+function volatilityRiskScore(t, r){
+  const atrPct = t.cmp?t.atr/t.cmp*100:0;
+  const atrP = atrPct<2?4:atrPct<3?3:atrPct<5?2:atrPct<7?1:0;
+  const betaP = r.beta<0.8?4:r.beta<1?3:r.beta<1.3?2:r.beta<1.6?1:0;
+  const ddP = r.dd3y>-15?4:r.dd3y>-25?3:r.dd3y>-40?2:r.dd3y>-55?1:0;
+  const volScore = round1((atrP+betaP+ddP)/12*100);
+  const liqScore = r.advt>50?100:r.advt>20?80:r.advt>10?60:r.advt>5?40:20;
+  return round1((volScore+liqScore)/2);
+}
+function catalystScore(catalysts){
+  const impactNum = {High:3, Medium:2, Low:1};
+  const pricedFactor = {No:1, Partial:0.6, Yes:0.2};
+  const subs = (catalysts||[]).filter(c=>c.desc && c.prob!==null && c.prob!=='').map(c =>
+    Number(c.prob) * (impactNum[c.impact]/3) * pricedFactor[c.pricedIn]);
+  if(subs.length===0) return null;
+  return round1(subs.reduce((a,b)=>a+b,0)/subs.length);
+}
+function redFlagPenalty(f, flags){
+  let pen = 0;
+  if(f.promoterPledge>0) pen -= 10;
+  if(f.pat && (f.cfo/f.pat)<0.5) pen -= 8;
+  if(f.marginChgBps<-200) pen -= 7;
+  if(flags.debtRising) pen -= 8;
+  if(flags.acctIrreg) pen -= 15;
+  if(flags.majorDilution) pen -= 8;
+  if(flags.insiderSelling) pen -= 5;
+  if(flags.relatedParty) pen -= 10;
+  if(flags.govConcern) pen -= 15;
+  return pen;
+}
+function classify(score, bands){
+  if(score===null||score===undefined) return '-';
+  for(let i=bands.length-1;i>=0;i--){ if(score>=bands[i][0]) return bands[i][1]; }
+  return bands[0][1];
+}
+const CLASS_BANDS = [[0,'Avoid'],[60,'Weak'],[70,'Watchlist'],[80,'Strong'],[90,'Exceptional']];
+const RR_BANDS = [[0,'Avoid'],[1.0,'Weak'],[1.5,'Acceptable'],[2.0,'Strong'],[3.0,'Exceptional']];
+function round1(x){ return Math.round(x*10)/10; }
+function classSlug(label){ return {Avoid:'avoid',Weak:'weak',Watchlist:'watchlist',Strong:'strong',Exceptional:'exceptional','-':'avoid'}[label] || 'avoid'; }
+
+function computeAll(stock, config){
+  const f=stock.fundamentals, v=stock.valuation, t=stock.technicals, r=stock.risk;
+  const bq = bqScore(f), gr = growthScore(f), bs = balanceSheetScore(f), cf = cashFlowScore(f);
+  const val = valuationScore(v);
+  const ts = technicalSetupScore(t), mo = momentumScore(t, config.nifty12m), rs = relativeStrengthScore(t, config.nifty12m),
+        vo = volumeScore(t), vr = volatilityRiskScore(t, r);
+  const cat = catalystScore(stock.catalysts);
+  const pen = redFlagPenalty(f, stock.flags);
+
+  const nz = x => (x===null||x===undefined) ? 0 : x;
+  const w = config.invWeights;
+  const invRaw = nz(bq)*w.quality/100 + nz(gr)*w.growth/100 + nz(val)*w.valuation/100 +
+                 nz(bs)*w.balanceSheet/100 + nz(cf)*w.cashFlow/100 + nz(cat)*w.catalyst/100 + nz(mo)*w.momentum/100;
+  const invFinal = Math.max(0, invRaw + pen);
+
+  const tw = config.tradeWeights;
+  const tradeRaw = nz(mo)*tw.momentum/100 + nz(rs)*tw.relStrength/100 + nz(ts)*tw.techSetup/100 +
+                    nz(vo)*tw.volume/100 + nz(cat)*tw.catalyst/100 + nz(vr)*tw.volRisk/100;
+  const tradeFinal = Math.max(0, tradeRaw + pen);
+
+  const h = stock.hypothesis;
+  let expReturn=null, expDownside=null, rewardRisk=null;
+  if(h && h.bullProb!=='' && h.baseProb!=='' && h.bearProb!==''){
+    expReturn = round1((Number(h.bullProb)*Number(h.bullRet) + Number(h.baseProb)*Number(h.baseRet) + Number(h.bearProb)*Number(h.bearRet))/100);
+    expDownside = Number(h.bearRet);
+    if(expDownside<0) rewardRisk = round1(expReturn/Math.abs(expDownside));
+  }
+
+  const buyZoneLow = t.dma20 ? round1(t.dma20*0.98) : null;
+  const buyZoneHigh = t.dma20 ? round1(t.dma20*1.02) : null;
+  const stop = (t.cmp && t.atr) ? round1(t.cmp - 1.5*t.atr) : null;
+  let posSize = null;
+  if(stop!==null && t.cmp && (t.cmp-stop)>0){
+    posSize = Math.floor((config.capital * config.riskPct/100) / (t.cmp - stop));
+  }
+
+  const invClass = classify(invFinal, CLASS_BANDS);
+  const tradeClass = classify(tradeFinal, CLASS_BANDS);
+  const rrClass = rewardRisk!==null ? classify(rewardRisk, RR_BANDS) : '-';
+
+  let action = 'AVOID';
+  if(h && h.status === 'Invalid'){ action = 'AVOID (Hypothesis Invalid)'; }
+  else if(pen <= -15){ action = 'AVOID (Red Flags)'; }
+  else if(invFinal>=80 && tradeFinal>=70 && rewardRisk!==null && rewardRisk>=2){ action = 'BUY'; }
+  else if(invFinal>=80 && tradeFinal<70){ action = 'BUY ON PULLBACK'; }
+  else if(invFinal>=70 && rewardRisk!==null && rewardRisk>=1.5){ action = 'WATCHLIST'; }
+  else if(invFinal>=70){ action = 'WATCHLIST'; }
+
+  return { bq, gr, bs, cf, val, ts, mo, rs, vo, vr, cat, pen,
+           invRaw:round1(invRaw), invFinal:round1(invFinal), invClass,
+           tradeRaw:round1(tradeRaw), tradeFinal:round1(tradeFinal), tradeClass,
+           expReturn, expDownside, rewardRisk, rrClass,
+           buyZoneLow, buyZoneHigh, stop, posSize, action };
+}
+
+// ============================== DEFAULT DATA ==============================
+function defaultConfig(){
+  return {
+    invWeights:{ quality:25, growth:20, valuation:20, balanceSheet:15, cashFlow:10, catalyst:5, momentum:5 },
+    tradeWeights:{ momentum:25, relStrength:20, techSetup:20, volume:15, catalyst:10, volRisk:10 },
+    nifty12m: 14.5, niftyCmp: 24800, nifty50dma: 24300, nifty200dma: 23600, vix: 13.2,
+    capital: 1000000, riskPct: 1,
+  };
+}
+function exampleStocks(){
+  return [
+    {
+      id: 'ex1', ticker: 'EXAMPLE CO 1 (sample data)', sector: 'IT Services',
+      fundamentals:{roce:28,roe:24,ebitdaMargin:24,marginChgBps:80,netMargin:18,revCagr3:14,revCagr5:12,epsCagr3:16,epsCagr5:13,qoqRev:3.5,de:0.05,intCov:45,currentRatio:2.8,cfo:12000,pat:11000,fcf:9500,promoterHold:55,promoterPledge:0},
+      valuation:{cmp:3120,pe:27,fpe:24,evEbitda:19,pb:11.5,peg:1.6,fcfYield:3.2,divYield:1.1,sectorPE:29,medianPE:26,fairValue:3450},
+      technicals:{cmp:3120,dma20:3080,dma50:2950,dma100:2820,dma200:2700,rsi:62,macd:8.5,adx:27,atr:55,vol:2100,avgVol:1550,high52:3180,breakout:true,ret1m:4.5,ret3m:9.0,ret6m:15.0,ret12m:24.0},
+      risk:{beta:0.85,histVol:22,dd1y:-14,dd3y:-28,currDD:-3,advt:85},
+      catalysts:[{desc:'Capacity expansion + margin uptick from new order wins',prob:70,impact:'High',time:3,pricedIn:'Partial'},{desc:'Deleveraging as debt matures in FY27',prob:55,impact:'Medium',time:6,pricedIn:'No'}],
+      hypothesis:{thesis:'Revenue growth should accelerate as capacity utilisation rises and mega-deal wins convert to billings; margins expand as offshore mix improves.',horizon:'Long Term',bullProb:25,bullRet:55,baseProb:55,baseRet:25,bearProb:20,bearRet:-20,invalidation:'Revenue growth < 8% for 2 consecutive quarters OR large client attrition',reviewDate:'2027-03-31',status:'Valid'},
+      flags:{debtRising:false,acctIrreg:false,majorDilution:false,insiderSelling:false,relatedParty:false,govConcern:false},
+    },
+    {
+      id: 'ex2', ticker: 'EXAMPLE CO 2 (sample data)', sector: 'Private Bank',
+      fundamentals:{roce:12,roe:16,ebitdaMargin:40,marginChgBps:50,netMargin:22,revCagr3:18,revCagr5:15,epsCagr3:20,epsCagr5:17,qoqRev:4.0,de:0.90,intCov:3.5,currentRatio:1.1,cfo:8000,pat:9500,fcf:6000,promoterHold:0,promoterPledge:0},
+      valuation:{cmp:1450,pe:18,fpe:16,evEbitda:null,pb:2.9,peg:0.9,fcfYield:4.8,divYield:0.8,sectorPE:20,medianPE:19,fairValue:1650},
+      technicals:{cmp:1450,dma20:1420,dma50:1360,dma100:1300,dma200:1250,rsi:58,macd:4.2,adx:22,atr:22,vol:8500,avgVol:6200,high52:1480,breakout:true,ret1m:3.0,ret3m:7.5,ret6m:13.0,ret12m:19.0},
+      risk:{beta:1.15,histVol:26,dd1y:-18,dd3y:-35,currDD:-5,advt:210},
+      catalysts:[{desc:'Credit growth re-acceleration as rate cycle turns',prob:60,impact:'High',time:2,pricedIn:'Partial'},{desc:'',prob:'',impact:'Medium',time:'',pricedIn:'No'}],
+      hypothesis:{thesis:'Credit growth re-rates as rate cuts flow through and asset quality stays stable; branch expansion drives fee income.',horizon:'Positional',bullProb:20,bullRet:45,baseProb:55,baseRet:22,bearProb:25,bearRet:-18,invalidation:'GNPA rises above 2.5% OR credit growth falls below 12% YoY',reviewDate:'2026-12-31',status:'Valid'},
+      flags:{debtRising:false,acctIrreg:false,majorDilution:false,insiderSelling:false,relatedParty:false,govConcern:false},
+    },
+    {
+      id: 'ex3', ticker: 'EXAMPLE CO 3 (sample data)', sector: 'FMCG',
+      fundamentals:{roce:32,roe:28,ebitdaMargin:20,marginChgBps:-150,netMargin:14,revCagr3:8,revCagr5:9,epsCagr3:6,epsCagr5:8,qoqRev:2.0,de:0.20,intCov:15,currentRatio:1.6,cfo:2200,pat:2500,fcf:1800,promoterHold:62,promoterPledge:3},
+      valuation:{cmp:2380,pe:52,fpe:47,evEbitda:34,pb:14.2,peg:3.8,fcfYield:1.6,divYield:1.9,sectorPE:45,medianPE:40,fairValue:2200},
+      technicals:{cmp:2380,dma20:2410,dma50:2440,dma100:2400,dma200:2350,rsi:41,macd:-3.1,adx:14,atr:38,vol:900,avgVol:950,high52:2650,breakout:false,ret1m:-1.5,ret3m:-2.0,ret6m:1.0,ret12m:4.0},
+      risk:{beta:1.35,histVol:34,dd1y:-22,dd3y:-48,currDD:-12,advt:32},
+      catalysts:[{desc:'New product launch in premium segment',prob:45,impact:'Medium',time:4,pricedIn:'No'},{desc:'Input cost softening improving gross margin',prob:65,impact:'Medium',time:2,pricedIn:'Partial'}],
+      hypothesis:{thesis:'Premiumisation and cost tailwinds should offset near-term volume softness; margin recovery is the swing factor.',horizon:'Swing',bullProb:20,bullRet:35,baseProb:45,baseRet:12,bearProb:35,bearRet:-22,invalidation:'Gross margin fails to recover for 2 quarters OR volume growth stays negative',reviewDate:'2026-11-30',status:'Valid'},
+      flags:{debtRising:false,acctIrreg:false,majorDilution:false,insiderSelling:false,relatedParty:true,govConcern:false},
+    },
+  ];
+}
+function blankStock(){
+  return {
+    id: 's'+Date.now()+Math.floor(Math.random()*1000), ticker:'New Stock', sector:'',
+    fundamentals:{roce:0,roe:0,ebitdaMargin:0,marginChgBps:0,netMargin:0,revCagr3:0,revCagr5:0,epsCagr3:0,epsCagr5:0,qoqRev:0,de:0,intCov:0,currentRatio:0,cfo:0,pat:0,fcf:0,promoterHold:0,promoterPledge:0},
+    valuation:{cmp:0,pe:0,fpe:0,evEbitda:0,pb:0,peg:0,fcfYield:0,divYield:0,sectorPE:0,medianPE:0,fairValue:0},
+    technicals:{cmp:0,dma20:0,dma50:0,dma100:0,dma200:0,rsi:50,macd:0,adx:0,atr:0,vol:0,avgVol:0,high52:0,breakout:false,ret1m:0,ret3m:0,ret6m:0,ret12m:0},
+    risk:{beta:1,histVol:0,dd1y:0,dd3y:0,currDD:0,advt:0},
+    catalysts:[{desc:'',prob:'',impact:'Medium',time:'',pricedIn:'No'},{desc:'',prob:'',impact:'Medium',time:'',pricedIn:'No'}],
+    hypothesis:{thesis:'',horizon:'Long Term',bullProb:'',bullRet:'',baseProb:'',baseRet:'',bearProb:'',bearRet:'',invalidation:'',reviewDate:'',status:'Under Review'},
+    flags:{debtRising:false,acctIrreg:false,majorDilution:false,insiderSelling:false,relatedParty:false,govConcern:false},
+  };
+}
+
+// ============================== STATE ==============================
+let STATE = { config: defaultConfig(), stocks: [] };
+let UI = { openDrawerId:null, activeTab:'fundamentals', configOpen:false, sortKey:'invFinal', sortDir:-1, saving:false, refreshing:false };
+
+async function apiGet(url){
+  const res = await fetch(url, { credentials:'include' });
+  if(res.status===401){ window.location.href='/login'; throw new Error('not authed'); }
+  if(!res.ok) throw new Error('Request failed: '+res.status);
+  return res.json();
+}
+async function apiPost(url, body){
+  const res = await fetch(url, {
+    method:'POST', credentials:'include',
+    headers:{'Content-Type':'application/json'},
+    body: body!==undefined ? JSON.stringify(body) : undefined,
+  });
+  if(res.status===401){ window.location.href='/login'; throw new Error('not authed'); }
+  if(!res.ok) throw new Error('Request failed: '+res.status);
+  return res.json();
+}
+async function apiDelete(url){
+  const res = await fetch(url, { method:'DELETE', credentials:'include' });
+  if(res.status===401){ window.location.href='/login'; throw new Error('not authed'); }
+  if(!res.ok) throw new Error('Request failed: '+res.status);
+  return res.json();
+}
+
+async function loadState(){
+  try{
+    const data = await apiGet('/api/state');
+    STATE.config = { ...defaultConfig(), ...data.config };
+    STATE.stocks = data.stocks.map(x => x.stock);
+    STATE.refreshStatus = data.refreshStatus;
+  }catch(e){ /* left with empty defaults; render() will show empty state */ }
+  render();
+}
+
+// Debounced per-stock save: sends only the relevant field-group to the backend.
+let saveTimers = {};
+function saveStockGroup(ticker, group, payload){
+  const key = ticker+':'+group;
+  clearTimeout(saveTimers[key]);
+  saveTimers[key] = setTimeout(async ()=>{
+    try{ await apiPost('/api/stock/'+encodeURIComponent(ticker), {[group]: payload}); showToast('Saved'); }
+    catch(e){ showToast('Could not save — check your connection'); }
+  }, 400);
+}
+function saveStockMeta(ticker, meta){
+  const key = ticker+':meta';
+  clearTimeout(saveTimers[key]);
+  saveTimers[key] = setTimeout(async ()=>{
+    try{ await apiPost('/api/stock/'+encodeURIComponent(ticker), meta); showToast('Saved'); }
+    catch(e){ showToast('Could not save — check your connection'); }
+  }, 400);
+}
+let configSaveTimer=null;
+function saveConfig(){
+  clearTimeout(configSaveTimer);
+  configSaveTimer = setTimeout(async ()=>{
+    try{ await apiPost('/api/config', STATE.config); showToast('Saved'); }
+    catch(e){ showToast('Could not save — check your connection'); }
+  }, 400);
+}
+async function refreshAll(){
+  if(UI.refreshing) return;
+  UI.refreshing = true; render();
+  showToast('Refreshing prices from Angel One...');
+  try{
+    const result = await apiPost('/api/refresh');
+    if(result.error){ showToast('Refresh failed: '+result.error); }
+    else{ showToast('Refreshed '+(result.updated||[]).length+' stocks'); }
+  }catch(e){ showToast('Refresh failed'); }
+  UI.refreshing = false;
+  await loadState();
+}
+async function refreshOne(ticker){
+  showToast('Refreshing '+ticker+'...');
+  try{
+    const result = await apiPost('/api/refresh/'+encodeURIComponent(ticker));
+    if(result.error){ showToast('Refresh failed: '+result.error); }
+    else{ showToast('Refreshed'); }
+  }catch(e){ showToast('Refresh failed'); }
+  await loadState();
+  renderDrawer(); openDrawer();
+}
+async function fetchFundamentalsFor(ticker){
+  showToast('Fetching fundamentals from Yahoo Finance...');
+  try{
+    const result = await apiPost('/api/fetch-fundamentals/'+encodeURIComponent(ticker));
+    if(result.error){ showToast('Fetch failed: '+result.error); }
+    else{
+      showToast('Fetched what was available — check warnings in console');
+      if(result.warnings && result.warnings.length) console.log('Fundamentals fetch warnings for '+ticker+':', result.warnings);
+    }
+  }catch(e){ showToast('Fetch failed'); }
+  await loadState();
+  renderDrawer(); openDrawer();
+}
+function showToast(msg){
+  const t = document.getElementById('toast');
+  if(!t) return;
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(()=>t.classList.remove('show'), 1600);
+}
+
+// ============================== RENDER ==============================
+const root = document.getElementById('app-root');
+
+function regimeLabel(cfg){
+  if(cfg.niftyCmp>cfg.nifty200dma && cfg.nifty50dma>cfg.nifty200dma && cfg.vix<16) return {l:'BULL', c:'var(--good)'};
+  if(cfg.vix>22) return {l:'HIGH VOLATILITY', c:'var(--bad)'};
+  if(cfg.niftyCmp<cfg.nifty200dma) return {l:'BEAR', c:'var(--bad)'};
+  return {l:'NEUTRAL', c:'var(--watch)'};
+}
+
+function fmtPct(x, d){ if(x===null||x===undefined||isNaN(x)) return '—'; return x.toFixed(d===undefined?1:d)+'%'; }
+function fmtNum(x, d){ if(x===null||x===undefined||isNaN(x)) return '—'; return x.toFixed(d===undefined?1:d); }
+function fmtCur(x){ if(x===null||x===undefined||isNaN(x)) return '—'; return '₹'+Math.round(x).toLocaleString('en-IN'); }
+
+function actionClass(action){
+  if(action==='BUY') return 'action-buy';
+  if(action==='BUY ON PULLBACK') return 'action-pullback';
+  if(action==='WATCHLIST') return 'action-watch';
+  return 'action-avoid';
+}
+
+function render(){
+  const cfg = STATE.config;
+  const regime = regimeLabel(cfg);
+  const computed = STATE.stocks.map(s => ({ stock:s, r: computeAll(s, cfg) }));
+
+  const counts = {BUY:0,'BUY ON PULLBACK':0,WATCHLIST:0,AVOID:0};
+  computed.forEach(c => {
+    if(c.r.action.startsWith('AVOID')) counts.AVOID++;
+    else counts[c.r.action] = (counts[c.r.action]||0)+1;
+  });
+
+  let sorted = [...computed];
+  sorted.sort((a,b)=>{
+    const get = (c)=> UI.sortKey==='ticker' ? c.stock.ticker : c.r[UI.sortKey];
+    let av=get(a), bv=get(b);
+    if(typeof av==='string') return UI.sortDir*av.localeCompare(bv);
+    av = av===null||av===undefined?-999:av; bv = bv===null||bv===undefined?-999:bv;
+    return UI.sortDir*(av-bv);
+  });
+
+  root.innerHTML = `
+    <div class="topbar">
+      <div class="brand">
+        <h1>NSE Stock Screener</h1>
+        <span class="sub">Multi-module scoring, live in your browser</span>
+      </div>
+      <div class="regime-badge"><span class="dot" style="background:${regime.c}"></span>Market: ${regime.l}</div>
+      ${STATE.refreshStatus && STATE.refreshStatus.lastRunAt ? `<div class="regime-badge" title="${STATE.refreshStatus.lastError?escapeHtml(STATE.refreshStatus.lastError):''}">
+        <span class="dot" style="background:${STATE.refreshStatus.lastError?'var(--bad)':'var(--good)'}"></span>
+        Prices: ${new Date(STATE.refreshStatus.lastRunAt).toLocaleString('en-IN')}
+      </div>` : ''}
+      <button class="btn" id="btn-refresh" ${UI.refreshing?'disabled':''}>${UI.refreshing?'Refreshing…':'🔄 Refresh Now'}</button>
+      <button class="btn" id="btn-settings">Market &amp; Weights</button>
+      <button class="btn btn-accent" id="btn-add">+ Add Stock</button>
+      <a href="/logout" class="btn btn-ghost" style="text-decoration:none;">Log out</a>
+    </div>
+
+    <div class="main">
+      <div class="summary-row">
+        <div class="summary-card"><div class="n">${STATE.stocks.length}</div><div class="l">Stocks tracked</div></div>
+        <div class="summary-card"><div class="n" style="color:var(--good)">${counts.BUY}</div><div class="l">Buy</div></div>
+        <div class="summary-card"><div class="n" style="color:var(--watch)">${counts['BUY ON PULLBACK']}</div><div class="l">Buy on pullback</div></div>
+        <div class="summary-card"><div class="n" style="color:var(--accent)">${counts.WATCHLIST}</div><div class="l">Watchlist</div></div>
+        <div class="summary-card"><div class="n" style="color:var(--bad)">${counts.AVOID}</div><div class="l">Avoid</div></div>
+      </div>
+
+      ${sorted.length===0 ? `
+        <div class="empty-state">
+          <h3>No stocks yet</h3>
+          <p>Add a stock to start screening — every score updates automatically as you fill in the numbers.</p>
+        </div>
+      ` : `
+      <table>
+        <thead>
+          <tr>
+            <th data-sort="ticker">Ticker</th>
+            <th data-sort="invFinal">Investment</th>
+            <th data-sort="tradeFinal">Trading</th>
+            <th data-sort="rewardRisk">Reward/Risk</th>
+            <th data-sort="pen">Flags</th>
+            <th data-sort="action">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${sorted.map(({stock,r}) => `
+            <tr data-id="${escapeHtml(stock.ticker)}">
+              <td class="ticker-cell"><div class="t">${escapeHtml(stock.ticker)}</div><div class="s">${escapeHtml(stock.sector||'—')}</div></td>
+              <td><span class="score-pill score-${classSlug(r.invClass)}">${fmtNum(r.invFinal,0)}</span> <span style="color:var(--muted); font-size:11px;">${r.invClass}</span></td>
+              <td><span class="score-pill score-${classSlug(r.tradeClass)}">${fmtNum(r.tradeFinal,0)}</span> <span style="color:var(--muted); font-size:11px;">${r.tradeClass}</span></td>
+              <td class="num">${r.rewardRisk!==null ? r.rewardRisk.toFixed(2)+'x' : '—'}</td>
+              <td>${r.pen<0 ? `<span class="rowflag">${r.pen}</span>` : `<span class="num" style="color:var(--muted)">0</span>`}</td>
+              <td><span class="action-badge ${actionClass(r.action)}">${r.action}</span></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+      `}
+
+      <div class="footer-note">
+        Scores are a decision-support filter built from the rules you configured — not investment advice and not a
+        guarantee of returns. Validate thresholds with your own record of results before sizing real positions.
+        Data is stored on your own server and only reachable behind your password login.
+      </div>
+    </div>
+
+    <div class="overlay" id="overlay"></div>
+    <div class="drawer" id="drawer"></div>
+    <div class="drawer" id="settings-drawer" style="width:min(480px,96vw)"></div>
+    <div class="toast" id="toast"></div>
+  `;
+
+  root.querySelectorAll('thead th[data-sort]').forEach(th => {
+    th.addEventListener('click', ()=>{
+      const key = th.dataset.sort;
+      if(UI.sortKey===key){ UI.sortDir *= -1; } else { UI.sortKey = key; UI.sortDir = -1; }
+      render();
+    });
+  });
+  root.querySelectorAll('tbody tr').forEach(tr => {
+    tr.addEventListener('click', ()=>{ UI.openDrawerId = tr.dataset.id; UI.activeTab='fundamentals'; renderDrawer(); openDrawer(); });
+  });
+  document.getElementById('btn-add').addEventListener('click', async ()=>{
+    const ticker = (prompt('Ticker (unique id, e.g. INFY)')||'').trim();
+    if(!ticker) return;
+    if(STATE.stocks.some(s=>s.ticker===ticker)){ showToast('That ticker already exists'); return; }
+    const tradingsymbol = (prompt('Angel One trading symbol (e.g. INFY-EQ)', ticker+'-EQ')||'').trim();
+    const exchange = (prompt('Exchange', 'NSE')||'NSE').trim();
+    try{
+      await apiPost('/api/stock/'+encodeURIComponent(ticker), { tradingsymbol, exchange, sector:'' });
+      await loadState();
+      UI.openDrawerId = ticker; UI.activeTab='fundamentals';
+      render(); renderDrawer(); openDrawer();
+    }catch(e){ showToast('Could not create stock'); }
+  });
+  document.getElementById('btn-settings').addEventListener('click', ()=>{ renderSettingsDrawer(); openSettingsDrawer(); });
+  document.getElementById('btn-refresh').addEventListener('click', refreshAll);
+  document.getElementById('overlay').addEventListener('click', closeAllDrawers);
+}
+
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function openDrawer(){ document.getElementById('overlay').classList.add('show'); document.getElementById('drawer').classList.add('show'); }
+function openSettingsDrawer(){ document.getElementById('overlay').classList.add('show'); document.getElementById('settings-drawer').classList.add('show'); }
+function closeAllDrawers(){
+  document.getElementById('overlay').classList.remove('show');
+  document.getElementById('drawer').classList.remove('show');
+  document.getElementById('settings-drawer').classList.remove('show');
+}
+
+function findStock(ticker){ return STATE.stocks.find(s=>s.ticker===ticker); }
+
+function fnum(v){ const n = parseFloat(v); return isNaN(n) ? 0 : n; }
+
+function renderDrawer(){
+  const drawer = document.getElementById('drawer');
+  if(!drawer || !UI.openDrawerId) { if(drawer) drawer.innerHTML=''; return; }
+  const stock = findStock(UI.openDrawerId);
+  if(!stock){ drawer.innerHTML=''; return; }
+  const r = computeAll(stock, STATE.config);
+  const f=stock.fundamentals, v=stock.valuation, t=stock.technicals, rk=stock.risk, h=stock.hypothesis;
+
+  const tabs = [
+    ['fundamentals','Fundamentals'], ['valuation','Valuation'], ['technicals','Technicals'],
+    ['risk','Risk'], ['catalysts','Catalysts'], ['hypothesis','Hypothesis'], ['flags','Red Flags'],
+  ];
+
+  drawer.innerHTML = `
+    <div class="drawer-head">
+      <div style="display:flex;flex-direction:column;gap:2px;width:60%;">
+        <div style="font-size:14px;font-weight:600;">${escapeHtml(stock.ticker)}</div>
+        <div style="font-size:10.5px;color:var(--muted);">${escapeHtml(stock.tradingsymbol||'')} · ${escapeHtml(stock.exchange||'NSE')}</div>
+      </div>
+      <input id="d-sector" value="${escapeHtml(stock.sector)}" placeholder="Sector" style="background:var(--panel-2);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:6px 8px;font-size:12px;width:35%;">
+      <button class="btn btn-ghost" id="d-close" title="Close">✕</button>
+    </div>
+    <div class="drawer-body">
+      <button class="btn" id="d-refresh" style="width:100%;margin-bottom:8px;">🔄 Refresh this stock from Angel One</button>
+      <button class="btn" id="d-fetch-fund" style="width:100%;margin-bottom:12px;">📊 Auto-fetch fundamentals (Yahoo Finance — partial, free)</button>
+      ${stock.updatedAt ? `<div style="color:var(--muted);font-size:11px;margin-bottom:12px;">Prices last updated: ${new Date(stock.updatedAt).toLocaleString('en-IN')}</div>` : `<div style="color:var(--muted);font-size:11px;margin-bottom:12px;">Not refreshed yet — click above to pull live data.</div>`}
+      <div class="verdict-box">
+        <div class="action-badge ${actionClass(r.action)}" style="font-size:13px;padding:6px 12px;">${r.action}</div>
+        <div class="row"><span>Investment Score</span><b>${fmtNum(r.invFinal,1)} (${r.invClass})</b></div>
+        <div class="row"><span>Trading Score</span><b>${fmtNum(r.tradeFinal,1)} (${r.tradeClass})</b></div>
+        <div class="row"><span>Expected Return / Downside</span><b>${fmtPct(r.expReturn)} / ${fmtPct(r.expDownside)}</b></div>
+        <div class="row"><span>Reward / Risk</span><b>${r.rewardRisk!==null?r.rewardRisk.toFixed(2)+'x':'—'} (${r.rrClass})</b></div>
+        <div class="row"><span>Buy Zone</span><b>${fmtCur(r.buyZoneLow)} – ${fmtCur(r.buyZoneHigh)}</b></div>
+        <div class="row"><span>Stop (technical)</span><b>${fmtCur(r.stop)}</b></div>
+        <div class="row"><span>Suggested Position Size</span><b>${r.posSize!==null?r.posSize+' shares':'—'}</b></div>
+        <div class="row"><span>Red-flag penalty</span><b style="color:${r.pen<0?'var(--bad)':'var(--text)'}">${r.pen}</b></div>
+      </div>
+
+      <div class="scoreboard">
+        ${[['Quality',r.bq],['Growth',r.gr],['Balance Sheet',r.bs],['Cash Flow',r.cf],['Valuation',r.val],
+           ['Momentum',r.mo],['Rel. Strength',r.rs],['Technical',r.ts],['Volume',r.vo],['Catalyst',r.cat],['Volatility/Risk',r.vr]]
+          .map(([k,val])=>`<div class="sb-item"><div class="v">${val===null?'—':val}</div><div class="k">${k}</div></div>`).join('')}
+      </div>
+
+      <div class="tabs">
+        ${tabs.map(([k,label])=>`<div class="tab ${UI.activeTab===k?'active':''}" data-tab="${k}">${label}</div>`).join('')}
+      </div>
+
+      <div class="tab-panel ${UI.activeTab==='fundamentals'?'active':''}" data-panel="fundamentals">
+        <div class="section-label">Profitability &amp; Quality</div>
+        <div class="grid3">
+          ${field('ROCE % (3Y avg)','f','roce',f.roce)}
+          ${field('ROE % (3Y avg)','f','roe',f.roe)}
+          ${field('EBITDA Margin %','f','ebitdaMargin',f.ebitdaMargin)}
+          ${field('EBITDA Margin chg (bps YoY)','f','marginChgBps',f.marginChgBps)}
+          ${field('Net Margin %','f','netMargin',f.netMargin)}
+          ${field('Promoter Holding %','f','promoterHold',f.promoterHold)}
+        </div>
+        <div class="section-label">Growth</div>
+        <div class="grid3">
+          ${field('Revenue CAGR 3Y %','f','revCagr3',f.revCagr3)}
+          ${field('Revenue CAGR 5Y %','f','revCagr5',f.revCagr5)}
+          ${field('EPS CAGR 3Y %','f','epsCagr3',f.epsCagr3)}
+          ${field('EPS CAGR 5Y %','f','epsCagr5',f.epsCagr5)}
+          ${field('Latest QoQ Rev growth %','f','qoqRev',f.qoqRev)}
+          ${field('Promoter Pledge %','f','promoterPledge',f.promoterPledge)}
+        </div>
+        <div class="section-label">Balance Sheet &amp; Cash Flow</div>
+        <div class="grid3">
+          ${field('Debt/Equity','f','de',f.de)}
+          ${field('Interest Coverage','f','intCov',f.intCov)}
+          ${field('Current Ratio','f','currentRatio',f.currentRatio)}
+          ${field('CFO latest FY (₹Cr)','f','cfo',f.cfo)}
+          ${field('PAT latest FY (₹Cr)','f','pat',f.pat)}
+          ${field('FCF latest FY (₹Cr)','f','fcf',f.fcf)}
+        </div>
+      </div>
+
+      <div class="tab-panel ${UI.activeTab==='valuation'?'active':''}" data-panel="valuation">
+        <div class="grid3">
+          ${field('CMP (₹)','v','cmp',v.cmp)}
+          ${field('P/E (TTM)','v','pe',v.pe)}
+          ${field('Forward P/E','v','fpe',v.fpe)}
+          ${field('EV/EBITDA','v','evEbitda',v.evEbitda)}
+          ${field('P/B','v','pb',v.pb)}
+          ${field('PEG','v','peg',v.peg)}
+          ${field('FCF Yield %','v','fcfYield',v.fcfYield)}
+          ${field('Dividend Yield %','v','divYield',v.divYield)}
+          ${field('Sector Avg P/E','v','sectorPE',v.sectorPE)}
+          ${field('5Y Median P/E','v','medianPE',v.medianPE)}
+          ${field('Fair Value Estimate (₹)','v','fairValue',v.fairValue)}
+        </div>
+      </div>
+
+      <div class="tab-panel ${UI.activeTab==='technicals'?'active':''}" data-panel="technicals">
+        <div class="section-label">Price &amp; Moving Averages</div>
+        <div class="grid3">
+          ${field('CMP (₹)','t','cmp',t.cmp)}
+          ${field('20 DMA','t','dma20',t.dma20)}
+          ${field('50 DMA','t','dma50',t.dma50)}
+          ${field('100 DMA','t','dma100',t.dma100)}
+          ${field('200 DMA','t','dma200',t.dma200)}
+          ${field('52W High (₹)','t','high52',t.high52)}
+        </div>
+        <div class="section-label">Oscillators &amp; Volume</div>
+        <div class="grid3">
+          ${field('RSI (14)','t','rsi',t.rsi)}
+          ${field('MACD (line-signal)','t','macd',t.macd)}
+          ${field('ADX','t','adx',t.adx)}
+          ${field('ATR (₹)','t','atr',t.atr)}
+          ${field("Volume today ('000)",'t','vol',t.vol)}
+          ${field("Avg Volume 20D ('000)",'t','avgVol',t.avgVol)}
+        </div>
+        <div class="section-label">Returns</div>
+        <div class="grid3">
+          ${field('1M Return %','t','ret1m',t.ret1m)}
+          ${field('3M Return %','t','ret3m',t.ret3m)}
+          ${field('6M Return %','t','ret6m',t.ret6m)}
+          ${field('12M Return %','t','ret12m',t.ret12m)}
+        </div>
+        <div class="fgroup" style="max-width:200px;margin-top:6px;">
+          <label>Breakout (last 3 days)?</label>
+          <select data-group="t" data-key="breakout">
+            <option value="true" ${t.breakout?'selected':''}>Yes</option>
+            <option value="false" ${!t.breakout?'selected':''}>No</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="tab-panel ${UI.activeTab==='risk'?'active':''}" data-panel="risk">
+        <div class="grid3">
+          ${field('Beta (3Y)','r','beta',rk.beta)}
+          ${field('Historical Volatility % (ann.)','r','histVol',rk.histVol)}
+          ${field('1Y Max Drawdown %','r','dd1y',rk.dd1y)}
+          ${field('3Y Max Drawdown %','r','dd3y',rk.dd3y)}
+          ${field('Current Drawdown from ATH %','r','currDD',rk.currDD)}
+          ${field('Avg Daily Traded Value (₹Cr)','r','advt',rk.advt)}
+        </div>
+      </div>
+
+      <div class="tab-panel ${UI.activeTab==='catalysts'?'active':''}" data-panel="catalysts">
+        ${stock.catalysts.map((c,i)=>`
+          <div class="catalyst-block">
+            <div class="section-label" style="margin-top:0">Catalyst ${i+1}</div>
+            <div class="fgroup" style="margin-bottom:10px;"><label>Description</label><textarea data-cat="${i}" data-key="desc">${escapeHtml(c.desc)}</textarea></div>
+            <div class="grid3">
+              <div class="fgroup"><label>Probability %</label><input type="number" data-cat="${i}" data-key="prob" value="${c.prob}"></div>
+              <div class="fgroup"><label>Impact</label>
+                <select data-cat="${i}" data-key="impact">
+                  ${['High','Medium','Low'].map(o=>`<option ${c.impact===o?'selected':''}>${o}</option>`).join('')}
+                </select>
+              </div>
+              <div class="fgroup"><label>Time (Qtrs)</label><input type="number" data-cat="${i}" data-key="time" value="${c.time}"></div>
+            </div>
+            <div class="fgroup" style="max-width:200px;margin-top:8px;"><label>Priced in?</label>
+              <select data-cat="${i}" data-key="pricedIn">
+                ${['No','Partial','Yes'].map(o=>`<option ${c.pricedIn===o?'selected':''}>${o}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+
+      <div class="tab-panel ${UI.activeTab==='hypothesis'?'active':''}" data-panel="hypothesis">
+        <div class="fgroup" style="margin-bottom:10px;"><label>Investment thesis — why this stock, why now</label>
+          <textarea data-group="h" data-key="thesis" style="min-height:70px;">${escapeHtml(h.thesis)}</textarea></div>
+        <div class="fgroup" style="max-width:220px;margin-bottom:10px;"><label>Time horizon</label>
+          <select data-group="h" data-key="horizon">
+            ${['Long Term','Positional','Swing','Tactical'].map(o=>`<option ${h.horizon===o?'selected':''}>${o}</option>`).join('')}
+          </select>
+        </div>
+        <div class="section-label">Scenarios (probabilities should sum to 100%)</div>
+        <div class="grid3">
+          ${field('Bull Prob %','h','bullProb',h.bullProb)}
+          ${field('Bull Return %','h','bullRet',h.bullRet)}
+          ${field('Base Prob %','h','baseProb',h.baseProb)}
+          ${field('Base Return %','h','baseRet',h.baseRet)}
+          ${field('Bear Prob %','h','bearProb',h.bearProb)}
+          ${field('Bear Return %','h','bearRet',h.bearRet)}
+        </div>
+        <div class="fgroup" style="margin:10px 0;"><label>Invalidation condition</label>
+          <textarea data-group="h" data-key="invalidation">${escapeHtml(h.invalidation)}</textarea></div>
+        <div class="grid2">
+          <div class="fgroup"><label>Next review date</label><input type="date" data-group="h" data-key="reviewDate" value="${h.reviewDate||''}"></div>
+          <div class="fgroup"><label>Status</label>
+            <select data-group="h" data-key="status">
+              ${['Valid','Under Review','Invalid'].map(o=>`<option ${h.status===o?'selected':''}>${o}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel ${UI.activeTab==='flags'?'active':''}" data-panel="flags">
+        <p style="color:var(--muted); font-size:12px; margin-bottom:10px;">These require judgement — pledge, cash-flow and margin flags are checked automatically from your Fundamentals inputs above.</p>
+        ${flagRow('Debt rising rapidly (YoY)','debtRising',stock.flags.debtRising,-8)}
+        ${flagRow('Accounting irregularity','acctIrreg',stock.flags.acctIrreg,-15)}
+        ${flagRow('Major dilution (recent/planned)','majorDilution',stock.flags.majorDilution,-8)}
+        ${flagRow('Insider selling','insiderSelling',stock.flags.insiderSelling,-5)}
+        ${flagRow('Related-party issue','relatedParty',stock.flags.relatedParty,-10)}
+        ${flagRow('Governance concern','govConcern',stock.flags.govConcern,-15)}
+      </div>
+
+      <button class="btn btn-danger" id="d-delete" style="margin-top:20px;width:100%;">Remove this stock</button>
+    </div>
+  `;
+
+  function field(label, group, key, val){
+    return `<div class="fgroup"><label>${label}</label><input type="number" step="any" data-group="${group}" data-key="${key}" value="${val===null||val===undefined?'':val}"></div>`;
+  }
+  function flagRow(label, key, checked, points){
+    return `<div class="flag-row"><span>${label} <span style="color:var(--muted)">(${points})</span></span>
+      <label class="toggle"><input type="checkbox" data-flag="${key}" ${checked?'checked':''}><span class="track"></span><span class="thumb"></span></label></div>`;
+  }
+
+  drawer.querySelector('#d-close').addEventListener('click', closeAllDrawers);
+  drawer.querySelector('#d-sector').addEventListener('input', e=>{ stock.sector = e.target.value; saveStockMeta(stock.ticker, {sector: stock.sector}); });
+  drawer.querySelector('#d-sector').addEventListener('blur', ()=>{ render(); renderDrawer(); openDrawer(); });
+  drawer.querySelector('#d-refresh').addEventListener('click', ()=> refreshOne(stock.ticker));
+  drawer.querySelector('#d-fetch-fund').addEventListener('click', ()=> fetchFundamentalsFor(stock.ticker));
+  drawer.querySelector('#d-delete').addEventListener('click', async ()=>{
+    try{ await apiDelete('/api/stock/'+encodeURIComponent(stock.ticker)); }catch(e){ showToast('Could not delete'); return; }
+    STATE.stocks = STATE.stocks.filter(s=>s.ticker!==stock.ticker);
+    UI.openDrawerId = null;
+    render();
+  });
+  drawer.querySelectorAll('.tab').forEach(tabEl=>{
+    tabEl.addEventListener('click', ()=>{ UI.activeTab = tabEl.dataset.tab; renderDrawer(); openDrawer(); });
+  });
+  const groupKeyMap = {f:'fundamentals', v:'valuation', t:'technicals', r:'risk', h:'hypothesis'};
+  drawer.querySelectorAll('input[data-group], select[data-group], textarea[data-group]').forEach(inp=>{
+    inp.addEventListener('change', ()=>{
+      const g = inp.dataset.group, k = inp.dataset.key;
+      const target = {f, v, t, r:rk, h}[g];
+      if(k==='breakout'){ target[k] = inp.value==='true'; }
+      else if(inp.tagName==='TEXTAREA' || inp.type==='date' || ['horizon','status'].includes(k)){ target[k] = inp.value; }
+      else { target[k] = inp.value===''? '' : fnum(inp.value); }
+      render(); renderDrawer(); openDrawer();
+      saveStockGroup(stock.ticker, groupKeyMap[g], target);
+    });
+  });
+  drawer.querySelectorAll('[data-cat]').forEach(inp=>{
+    inp.addEventListener('change', ()=>{
+      const i = Number(inp.dataset.cat), k = inp.dataset.key;
+      if(inp.tagName==='TEXTAREA' || k==='impact' || k==='pricedIn'){ stock.catalysts[i][k] = inp.value; }
+      else { stock.catalysts[i][k] = inp.value===''? '' : fnum(inp.value); }
+      render(); renderDrawer(); openDrawer();
+      saveStockGroup(stock.ticker, 'catalysts', stock.catalysts);
+    });
+  });
+  drawer.querySelectorAll('[data-flag]').forEach(inp=>{
+    inp.addEventListener('change', ()=>{
+      stock.flags[inp.dataset.flag] = inp.checked;
+      render(); renderDrawer(); openDrawer();
+      saveStockGroup(stock.ticker, 'flags', stock.flags);
+    });
+  });
+}
+
+function renderSettingsDrawer(){
+  const drawer = document.getElementById('settings-drawer');
+  const cfg = STATE.config;
+  const invTotal = Object.values(cfg.invWeights).reduce((a,b)=>a+Number(b),0);
+  const tradeTotal = Object.values(cfg.tradeWeights).reduce((a,b)=>a+Number(b),0);
+  const invLabels = {quality:'Business Quality',growth:'Fundamental Growth',valuation:'Valuation',balanceSheet:'Balance Sheet',cashFlow:'Cash Flow',catalyst:'Catalyst',momentum:'Momentum'};
+  const tradeLabels = {momentum:'Momentum',relStrength:'Relative Strength',techSetup:'Technical Setup',volume:'Volume',catalyst:'Catalyst',volRisk:'Volatility/Risk'};
+
+  drawer.innerHTML = `
+    <div class="drawer-head"><h2>Market &amp; Weights</h2><button class="btn btn-ghost" id="s-close">✕</button></div>
+    <div class="drawer-body">
+      <div class="section-label" style="margin-top:0">Market Regime Inputs</div>
+      <div class="grid2">
+        ${sfield('Nifty 50 CMP','niftyCmp',cfg.niftyCmp)}
+        ${sfield('Nifty 50 DMA','nifty50dma',cfg.nifty50dma)}
+        ${sfield('Nifty 200 DMA','nifty200dma',cfg.nifty200dma)}
+        ${sfield('India VIX','vix',cfg.vix)}
+        ${sfield('Nifty 12M Return %','nifty12m',cfg.nifty12m)}
+      </div>
+
+      <div class="section-label">Capital &amp; Risk</div>
+      <div class="grid2">
+        ${sfield('Total Capital (₹)','capital',cfg.capital)}
+        ${sfield('Max Risk per Position %','riskPct',cfg.riskPct)}
+      </div>
+
+      <div class="section-label">Investment Score Weights</div>
+      ${Object.keys(cfg.invWeights).map(k=>weightRow('inv',k,invLabels[k],cfg.invWeights[k])).join('')}
+      <div class="weight-total ${invTotal===100?'ok':'bad'}">Total: ${invTotal}% ${invTotal===100?'✓':'— should be 100%'}</div>
+
+      <div class="section-label">Trading Score Weights</div>
+      ${Object.keys(cfg.tradeWeights).map(k=>weightRow('trade',k,tradeLabels[k],cfg.tradeWeights[k])).join('')}
+      <div class="weight-total ${tradeTotal===100?'ok':'bad'}">Total: ${tradeTotal}% ${tradeTotal===100?'✓':'— should be 100%'}</div>
+
+      <button class="btn" id="s-reset" style="margin-top:20px;width:100%;">Reset to default weights</button>
+    </div>
+  `;
+
+  function sfield(label,key,val){
+    return `<div class="fgroup"><label>${label}</label><input type="number" step="any" data-cfg="${key}" value="${val}"></div>`;
+  }
+  function weightRow(group, key, label, val){
+    return `<div class="weight-row">
+      <div class="wlabel">${label}</div>
+      <input type="range" min="0" max="50" value="${val}" data-wgroup="${group}" data-wkey="${key}">
+      <div class="wval">${val}%</div>
+    </div>`;
+  }
+
+  drawer.querySelector('#s-close').addEventListener('click', closeAllDrawers);
+  drawer.querySelectorAll('[data-cfg]').forEach(inp=>{
+    inp.addEventListener('change', ()=>{ cfg[inp.dataset.cfg] = fnum(inp.value); render(); renderSettingsDrawer(); openSettingsDrawer(); saveConfig(); });
+  });
+  drawer.querySelectorAll('[data-wgroup]').forEach(inp=>{
+    inp.addEventListener('input', ()=>{
+      const g = inp.dataset.wgroup==='inv'?cfg.invWeights:cfg.tradeWeights;
+      g[inp.dataset.wkey] = fnum(inp.value);
+      renderSettingsDrawer(); openSettingsDrawer();
+    });
+    inp.addEventListener('change', ()=>{ render(); saveConfig(); });
+  });
+  drawer.querySelector('#s-reset').addEventListener('click', ()=>{
+    const d = defaultConfig();
+    cfg.invWeights = d.invWeights; cfg.tradeWeights = d.tradeWeights;
+    render(); renderSettingsDrawer(); openSettingsDrawer(); saveConfig();
+  });
+}
+
+loadState();
+})();
+</script>

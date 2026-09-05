@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: nse-stock-screener
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --app-dir backend
+    envVars:
+      - key: DASHBOARD_PASSWORD
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: ANGEL_API_KEY
+        sync: false
+      - key: ANGEL_CLIENT_CODE
+        sync: false
+      - key: ANGEL_MPIN
+        sync: false
+      - key: ANGEL_TOTP_SECRET
+        sync: false
+      - key: REFRESH_INTERVAL_MINUTES
+        value: "30"
+      - key: ENABLE_SCHEDULER
+        value: "true"
+    disk:
+      name: screener-data
+      mountPath: /opt/render/project/src
+      sizeGB: 1
