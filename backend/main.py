@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 # Load .env from the project root (one level up from this backend/ folder)
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-from fastapi import FastAPI, Request, Depends, HTTPException, Response, Form
+from fastapi import FastAPI, Request, Depends, HTTPException, Response, Form, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from pydantic import BaseModel
 
@@ -17,6 +17,7 @@ import scheduler
 import refresh_service
 import score_engine
 import fundamentals_fetch
+import screener_csv_import
 
 STATIC_DIR = Path(__file__).parent.parent / "static"
 
@@ -176,6 +177,18 @@ def api_fetch_fundamentals(ticker: str, _: None = Depends(auth.require_login)):
         valuation=result.get("valuation") or None,
     )
     return {"ok": True, "warnings": result.get("warnings", []), "stock": db.get_stock(ticker)}
+
+
+@app.post("/api/import-screener-csv")
+async def api_import_screener_csv(file: UploadFile = File(...), _: None = Depends(auth.require_login)):
+    """
+    Bulk-imports fundamentals/valuation from a Screener.in CSV export.
+    Matches rows to stocks you've already added by trading symbol — it never
+    creates new stocks, only fills in data for ones you've added.
+    """
+    contents = await file.read()
+    result = screener_csv_import.import_csv(contents)
+    return result
 
 
 @app.get("/api/health")
