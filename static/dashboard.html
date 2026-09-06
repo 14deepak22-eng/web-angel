@@ -421,6 +421,14 @@ async function apiDelete(url){
   if(!res.ok) throw new Error('Request failed: '+res.status);
   return res.json();
 }
+async function apiUpload(url, file){
+  const formData = new FormData();
+  formData.append('file', file);
+  const res = await fetch(url, { method:'POST', credentials:'include', body: formData });
+  if(res.status===401){ window.location.href='/login'; throw new Error('not authed'); }
+  if(!res.ok) throw new Error('Request failed: '+res.status);
+  return res.json();
+}
 
 async function loadState(){
   try{
@@ -493,6 +501,23 @@ async function fetchFundamentalsFor(ticker){
   await loadState();
   renderDrawer(); openDrawer();
 }
+async function importScreenerCsv(file){
+  showToast('Uploading CSV and matching to your stocks...');
+  try{
+    const result = await apiUpload('/api/import-screener-csv', file);
+    if(result.error){ showToast('Import failed: '+result.error); }
+    else{
+      const matchedCount = result.matched.length;
+      const unmatchedCount = result.unmatched.length;
+      let msg = 'Updated '+matchedCount+' stock'+(matchedCount===1?'':'s')+'.';
+      if(unmatchedCount>0){ msg += ' '+unmatchedCount+' row'+(unmatchedCount===1?'':'s')+' unmatched.'; }
+      showToast(msg);
+      if(result.unmatched && result.unmatched.length) console.log('Screener CSV rows that did not match any stock you added:', result.unmatched);
+      if(result.matched && result.matched.length) console.log('Screener CSV import updated:', result.matched);
+    }
+  }catch(e){ showToast('Import failed'); }
+  await loadState();
+}
 function showToast(msg){
   const t = document.getElementById('toast');
   if(!t) return;
@@ -554,6 +579,8 @@ function render(){
         Prices: ${new Date(STATE.refreshStatus.lastRunAt).toLocaleString('en-IN')}
       </div>` : ''}
       <button class="btn" id="btn-refresh" ${UI.refreshing?'disabled':''}>${UI.refreshing?'Refreshing…':'🔄 Refresh Now'}</button>
+      <button class="btn" id="btn-import-csv">📄 Import Screener.in CSV</button>
+      <input type="file" id="csv-file-input" accept=".csv" style="display:none;">
       <button class="btn" id="btn-settings">Market &amp; Weights</button>
       <button class="btn btn-accent" id="btn-add">+ Add Stock</button>
       <a href="/logout" class="btn btn-ghost" style="text-decoration:none;">Log out</a>
@@ -638,6 +665,12 @@ function render(){
   });
   document.getElementById('btn-settings').addEventListener('click', ()=>{ renderSettingsDrawer(); openSettingsDrawer(); });
   document.getElementById('btn-refresh').addEventListener('click', refreshAll);
+  document.getElementById('btn-import-csv').addEventListener('click', ()=> document.getElementById('csv-file-input').click());
+  document.getElementById('csv-file-input').addEventListener('change', (e)=>{
+    const file = e.target.files[0];
+    if(file){ importScreenerCsv(file); }
+    e.target.value = '';
+  });
   document.getElementById('overlay').addEventListener('click', closeAllDrawers);
 }
 
