@@ -18,6 +18,7 @@ import refresh_service
 import score_engine
 import fundamentals_fetch
 import screener_csv_import
+import screener_excel_import
 
 STATIC_DIR = Path(__file__).parent.parent / "static"
 
@@ -189,6 +190,29 @@ async def api_import_screener_csv(file: UploadFile = File(...), _: None = Depend
     contents = await file.read()
     result = screener_csv_import.import_csv(contents)
     return result
+
+
+@app.post("/api/import-screener-excel/{ticker}")
+async def api_import_screener_excel(ticker: str, file: UploadFile = File(...), _: None = Depends(auth.require_login)):
+    """
+    Imports fundamentals from Screener.in's per-company Excel export
+    ("Export to Excel" on a company's screener.in page) for one specific
+    stock you've already added.
+    """
+    stock = db.get_stock(ticker)
+    if not stock:
+        return {"error": f"{ticker} not found"}
+    contents = await file.read()
+    result = screener_excel_import.parse_screener_excel(contents)
+    if result.get("error"):
+        return result
+    db.upsert_stock_manual(
+        ticker,
+        fundamentals=result.get("fundamentals") or None,
+        valuation=result.get("valuation") or None,
+    )
+    return {"ok": True, "company_name": result.get("company_name"),
+            "warnings": result.get("warnings", []), "stock": db.get_stock(ticker)}
 
 
 @app.get("/api/health")
