@@ -29,8 +29,9 @@ def _load_master() -> list:
 def find_token(tradingsymbol: str, exchange: str = "NSE") -> str:
     """e.g. find_token('RELIANCE-EQ', 'NSE') -> '2885'"""
     master = _load_master()
+    tradingsymbol_upper = tradingsymbol.upper()
     for row in master:
-        if row.get("symbol") == tradingsymbol and row.get("exch_seg") == exchange:
+        if row.get("symbol", "").upper() == tradingsymbol_upper and row.get("exch_seg") == exchange:
             return row["token"]
     raise ValueError(f"Could not find symboltoken for {tradingsymbol} on {exchange}. "
                       f"Check the exact trading symbol format (usually SYMBOL-EQ for equities).")
