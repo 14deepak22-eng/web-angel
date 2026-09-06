@@ -6,8 +6,22 @@ Treat it as a time-saving starting point, not a source of truth: always
 sanity-check against Screener.in before trusting a number, and there are
 several fields (ROCE, promoter holding/pledge, true 3-year CAGR, margin
 *trend*) it simply cannot provide — those still need manual entry.
+
+NOTE: Yahoo Finance frequently blocks or rate-limits requests coming from
+cloud/datacenter IPs (Render, AWS, etc.) since they look like automated
+scraping. Using a browser-like session (custom User-Agent) below reduces
+how often this happens, though it can never be eliminated entirely on a
+free, unofficial data source — if it still fails, waiting a few minutes
+and retrying is often enough.
 """
+import requests
 import yfinance as yf
+
+_session = requests.Session()
+_session.headers.update({
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                  "(KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+})
 
 
 def fetch_yahoo_fundamentals(tradingsymbol: str, exchange: str = "NSE") -> dict:
@@ -19,18 +33,20 @@ def fetch_yahoo_fundamentals(tradingsymbol: str, exchange: str = "NSE") -> dict:
     base_symbol = tradingsymbol.replace("-EQ", "").replace("-BE", "")
     yahoo_suffix = ".NS" if exchange.upper() == "NSE" else ".BO"
     yahoo_symbol = f"{base_symbol}{yahoo_suffix}"
-
     warnings = []
     fundamentals = {}
     valuation = {}
-
     try:
-        info = yf.Ticker(yahoo_symbol).info
+        info = yf.Ticker(yahoo_symbol, session=_session).info
     except Exception as e:
-        return {"error": f"Could not reach Yahoo Finance for {yahoo_symbol}: {e}"}
+        return {"error": f"Could not reach Yahoo Finance for {yahoo_symbol}: {type(e).__name__}: {e}"}
 
     if not info or info.get("regularMarketPrice") is None:
-        return {"error": f"No data returned for {yahoo_symbol} — check the trading symbol is correct."}
+        return {"error": f"No data returned for {yahoo_symbol} — this is usually Yahoo "
+                          f"temporarily rate-limiting the server rather than a wrong symbol "
+                          f"(we confirmed this symbol is valid). Wait a few minutes and try "
+                          f"again; if it keeps failing for every stock, not just this one, "
+                          f"Yahoo may be blocking this server's IP for now."}
 
     def pct(x):
         """Yahoo often returns ratios as decimals (0.15 = 15%) — convert to our whole-number-percent convention."""
@@ -51,7 +67,6 @@ def fetch_yahoo_fundamentals(tradingsymbol: str, exchange: str = "NSE") -> dict:
     if info.get("profitMargins") is not None:
         fundamentals["netMargin"] = pct(info["profitMargins"])
     if info.get("debtToEquity") is not None:
-        # Yahoo reports this as a percentage-like number (e.g. 45.2 meaning 0.45 ratio)
         fundamentals["de"] = round(info["debtToEquity"] / 100, 2)
     if info.get("revenueGrowth") is not None:
         fundamentals["revCagr3"] = pct(info["revenueGrowth"])
@@ -65,6 +80,7 @@ def fetch_yahoo_fundamentals(tradingsymbol: str, exchange: str = "NSE") -> dict:
                             "cfo", "pat", "fcf"] if f not in fundamentals]
     if missing:
         warnings.append(f"Not available from Yahoo Finance — still need manual entry from Screener.in: {', '.join(missing)}")
+
     missing_val = [vf for vf in ["peg", "fcfYield", "sectorPE", "medianPE", "fairValue"] if vf not in valuation]
     if missing_val:
         warnings.append(f"Not available from Yahoo Finance (valuation) — still need manual entry: {', '.join(missing_val)}")
