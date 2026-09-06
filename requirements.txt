@@ -9,3 +9,4 @@ pandas
 requests
 logzero
 websocket-client
+yfinance
