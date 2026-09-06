@@ -20,6 +20,25 @@ import fundamentals_fetch
 import screener_csv_import
 import screener_excel_import
 
+import math
+
+def json_safe(obj):
+    """
+    Recursively replaces NaN/Infinity floats with None. Needed because a
+    single bad float anywhere in a nested stock dict (e.g. a 0/0 division
+    while computing a return %) otherwise crashes JSON serialization for
+    the ENTIRE response, not just that one field -- which is why one bad
+    stock could make every stock disappear from the dashboard at once.
+    """
+    if isinstance(obj, float):
+        return None if (math.isnan(obj) or math.isinf(obj)) else obj
+    if isinstance(obj, dict):
+        return {k: json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [json_safe(v) for v in obj]
+    return obj
+
+
 STATIC_DIR = Path(__file__).parent.parent / "static"
 
 app = FastAPI(title="NSE Stock Screener")
@@ -129,7 +148,7 @@ def api_state(_: None = Depends(auth.require_login)):
             cfg.get("invWeights"), cfg.get("tradeWeights"),
         )
         out.append({"stock": s, "scores": scores})
-    return {"config": cfg, "stocks": out, "refreshStatus": refresh_service.get_status()}
+    return json_safe({"config": cfg, "stocks": out, "refreshStatus": refresh_service.get_status()})
 
 
 @app.post("/api/config")
@@ -144,7 +163,7 @@ def api_update_config(update: ConfigUpdate, _: None = Depends(auth.require_login
 @app.post("/api/stock/{ticker}")
 def api_upsert_stock(ticker: str, body: StockUpsert, _: None = Depends(auth.require_login)):
     db.upsert_stock_manual(ticker, **body.dict(exclude_unset=True))
-    return {"ok": True, "stock": db.get_stock(ticker)}
+    return json_safe({"ok": True, "stock": db.get_stock(ticker)})
 
 
 @app.delete("/api/stock/{ticker}")
@@ -155,12 +174,12 @@ def api_delete_stock(ticker: str, _: None = Depends(auth.require_login)):
 
 @app.post("/api/refresh")
 def api_refresh_all(_: None = Depends(auth.require_login)):
-    return refresh_service.refresh_all()
+    return json_safe(refresh_service.refresh_all())
 
 
 @app.post("/api/refresh/{ticker}")
 def api_refresh_one(ticker: str, _: None = Depends(auth.require_login)):
-    return refresh_service.refresh_one(ticker)
+    return json_safe(refresh_service.refresh_one(ticker))
 
 
 @app.post("/api/fetch-fundamentals/{ticker}")
@@ -177,7 +196,7 @@ def api_fetch_fundamentals(ticker: str, _: None = Depends(auth.require_login)):
         fundamentals=result.get("fundamentals") or None,
         valuation=result.get("valuation") or None,
     )
-    return {"ok": True, "warnings": result.get("warnings", []), "stock": db.get_stock(ticker)}
+    return json_safe({"ok": True, "warnings": result.get("warnings", []), "stock": db.get_stock(ticker)})
 
 
 @app.post("/api/import-screener-csv")
@@ -211,8 +230,8 @@ async def api_import_screener_excel(ticker: str, file: UploadFile = File(...), _
         fundamentals=result.get("fundamentals") or None,
         valuation=result.get("valuation") or None,
     )
-    return {"ok": True, "company_name": result.get("company_name"),
-            "warnings": result.get("warnings", []), "stock": db.get_stock(ticker)}
+    return json_safe({"ok": True, "company_name": result.get("company_name"),
+            "warnings": result.get("warnings", []), "stock": db.get_stock(ticker)})
 
 
 @app.get("/api/health")
