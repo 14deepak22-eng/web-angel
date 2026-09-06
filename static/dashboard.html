@@ -501,6 +501,26 @@ async function fetchFundamentalsFor(ticker){
   await loadState();
   renderDrawer(); openDrawer();
 }
+async function importScreenerExcelFor(ticker, file){
+  showToast('Uploading and parsing Excel export...');
+  try{
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch('/api/import-screener-excel/'+encodeURIComponent(ticker), {
+      method:'POST', credentials:'include', body: formData,
+    });
+    if(res.status===401){ window.location.href='/login'; return; }
+    const result = await res.json();
+    if(result.error){ showToast('Import failed: '+result.error); }
+    else{
+      showToast('Imported from '+(result.company_name||'Excel file'));
+      if(result.warnings && result.warnings.length) console.log('Screener Excel import warnings for '+ticker+':', result.warnings);
+    }
+  }catch(e){ showToast('Import failed'); }
+  await loadState();
+  renderDrawer(); openDrawer();
+}
+
 async function importScreenerCsv(file){
   showToast('Uploading CSV and matching to your stocks...');
   try{
@@ -712,7 +732,9 @@ function renderDrawer(){
     </div>
     <div class="drawer-body">
       <button class="btn" id="d-refresh" style="width:100%;margin-bottom:8px;">🔄 Refresh this stock from Angel One</button>
-      <button class="btn" id="d-fetch-fund" style="width:100%;margin-bottom:12px;">📊 Auto-fetch fundamentals (Yahoo Finance — partial, free)</button>
+      <button class="btn" id="d-fetch-fund" style="width:100%;margin-bottom:8px;">📊 Auto-fetch fundamentals (Yahoo Finance — partial, free)</button>
+      <button class="btn" id="d-import-excel" style="width:100%;margin-bottom:12px;">📥 Import Screener.in Excel export</button>
+      <input type="file" id="d-excel-input" accept=".xlsx" style="display:none;">
       ${stock.updatedAt ? `<div style="color:var(--muted);font-size:11px;margin-bottom:12px;">Prices last updated: ${new Date(stock.updatedAt).toLocaleString('en-IN')}</div>` : `<div style="color:var(--muted);font-size:11px;margin-bottom:12px;">Not refreshed yet — click above to pull live data.</div>`}
       <div class="verdict-box">
         <div class="action-badge ${actionClass(r.action)}" style="font-size:13px;padding:6px 12px;">${r.action}</div>
@@ -907,6 +929,12 @@ function renderDrawer(){
   drawer.querySelector('#d-sector').addEventListener('blur', ()=>{ render(); renderDrawer(); openDrawer(); });
   drawer.querySelector('#d-refresh').addEventListener('click', ()=> refreshOne(stock.ticker));
   drawer.querySelector('#d-fetch-fund').addEventListener('click', ()=> fetchFundamentalsFor(stock.ticker));
+  drawer.querySelector('#d-import-excel').addEventListener('click', ()=> drawer.querySelector('#d-excel-input').click());
+  drawer.querySelector('#d-excel-input').addEventListener('change', (e)=>{
+    const file = e.target.files[0];
+    if(file){ importScreenerExcelFor(stock.ticker, file); }
+    e.target.value = '';
+  });
   drawer.querySelector('#d-delete').addEventListener('click', async ()=>{
     try{ await apiDelete('/api/stock/'+encodeURIComponent(stock.ticker)); }catch(e){ showToast('Could not delete'); return; }
     STATE.stocks = STATE.stocks.filter(s=>s.ticker!==stock.ticker);
