@@ -19,6 +19,7 @@ import score_engine
 import fundamentals_fetch
 import screener_csv_import
 import screener_excel_import
+import instruments
 
 import math
 
@@ -232,6 +233,12 @@ async def api_import_screener_excel(ticker: str, file: UploadFile = File(...), _
     )
     return json_safe({"ok": True, "company_name": result.get("company_name"),
             "warnings": result.get("warnings", []), "stock": db.get_stock(ticker)})
+
+
+@app.get("/api/search-symbols")
+def api_search_symbols(q: str = "", _: None = Depends(auth.require_login)):
+    """Type-ahead search for the Add Stock box — searches Angel One's instrument list."""
+    return {"results": instruments.search_symbols(q)}
 
 
 @app.get("/api/health")
