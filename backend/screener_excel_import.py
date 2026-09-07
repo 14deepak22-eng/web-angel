@@ -2,9 +2,9 @@
 Imports fundamentals from Screener.in's per-company Excel export — this is
 the file you download from a company's page on screener.in via "Export to
 Excel". It's a completely different format from a screen's CSV export: one
-file per company, with 10 years of P&L/Balance Sheet/Cash Flow data on the
-"Data Sheet" tab (the other tabs are just formula-driven views of the same
-data, so we read "Data Sheet" directly).
+file per company, with up to 10 years of P&L/Balance Sheet/Cash Flow data on
+the "Data Sheet" tab (the other tabs are just formula-driven views of the
+same data, so we read "Data Sheet" directly).
 
 WHAT THIS DERIVES vs WHAT IT CAN'T:
   Derivable directly from the numbers in this file: revenue & EPS CAGR (3Y/5Y),
@@ -17,12 +17,34 @@ WHAT THIS DERIVES vs WHAT IT CAN'T:
     - Current ratio (no current-vs-non-current asset/liability split given)
     - Sector P/E, historical median P/E, fair value estimate (need external data)
     - True FCF (no explicit capex line — we approximate FCF as
-      CFO + Cash from Investing Activity, which is a rough stand-in, not a
-      textbook FCF calculation, and is flagged as such in the warnings)
+      CFO + Cash from Investing Activity, flagged as an approximation)
+
+DATA GAPS THIS HANDLES GRACEFULLY (rather than crashing):
+  - Recently-listed companies have blank/None cells for years before they
+    existed or before they filed — any metric touching a blank year is
+    skipped (left out of the result) rather than crashing the whole import.
+  - Banks/NBFCs and other non-manufacturing companies use a different P&L
+    layout on Screener (no "Raw Material Cost" etc.) — missing row labels
+    default to zero-effect rather than raising an error, though this means
+    OPM/EBITDA-margin-based figures may be less meaningful for those company
+    types (there's no reliable way to detect "this is a bank" from the file
+    alone, so we compute what the numbers allow and let the numbers speak).
 """
 
 import io
 import openpyxl
+
+
+def _safe_add(a, b):
+    return None if (a is None or b is None) else a + b
+
+
+def _safe_sub(a, b):
+    return None if (a is None or b is None) else a - b
+
+
+def _safe_div(a, b):
+    return None if (a is None or b is None or b == 0) else a / b
 
 
 def _read_section(rows: list, start_idx: int) -> tuple[dict, tuple | None]:
@@ -44,6 +66,11 @@ def _read_section(rows: list, start_idx: int) -> tuple[dict, tuple | None]:
             data[label] = row[1:]
         i += 1
     return data, dates
+
+
+def _series(section: dict, label: str, n_years: int) -> tuple:
+    """Gets a row's values, or a same-length tuple of None if the row doesn't exist at all."""
+    return section.get(label, tuple([None] * n_years))
 
 
 def _cagr(values: tuple, years: int) -> float | None:
@@ -79,9 +106,9 @@ def parse_screener_excel(file_bytes: bytes) -> dict:
             section_start[row[0]] = i
 
     required = ["PROFIT & LOSS", "BALANCE SHEET", "CASH FLOW:", "DERIVED:"]
-    missing = [s for s in required if s not in section_start]
-    if missing:
-        return {"error": f"Expected sections not found in this file: {', '.join(missing)}. "
+    missing_sections = [s for s in required if s not in section_start]
+    if missing_sections:
+        return {"error": f"Expected sections not found in this file: {', '.join(missing_sections)}. "
                           f"The export format may have changed — check the file manually."}
 
     try:
@@ -96,74 +123,110 @@ def parse_screener_excel(file_bytes: bytes) -> dict:
         q, _ = _read_section(rows, section_start["Quarters"]) if "Quarters" in section_start else ({}, None)
 
         warnings = []
+        skipped = []  # metrics we couldn't compute, for an honest summary at the end
 
+        sales = _series(pl, "Sales", len(pl.get("Sales", ())) or 10)
+        n_years = len(sales)
+
+        # ---- Operating profit / OPM per year (None-safe: skips years with no Sales figure) ----
         opex_labels = ["Raw Material Cost", "Change in Inventory", "Power and Fuel",
                        "Other Mfr. Exp", "Employee Cost", "Selling and admin", "Other Expenses"]
-        n_years = len(pl["Sales"])
         op_profit = []
         for i in range(n_years):
-            expenses = sum((pl.get(l, [0] * n_years)[i] or 0) for l in opex_labels)
-            op_profit.append(pl["Sales"][i] - expenses)
-        opm = [(op / sales * 100) if sales else None for op, sales in zip(op_profit, pl["Sales"])]
+            sales_i = sales[i]
+            if sales_i is None:
+                op_profit.append(None)
+                continue
+            expenses = sum((_series(pl, l, n_years)[i] or 0) for l in opex_labels)
+            op_profit.append(sales_i - expenses)
+        opm = [(op / s * 100) if (s and op is not None) else None for op, s in zip(op_profit, sales)]
 
-        rev_cagr3 = _cagr(pl["Sales"], 3)
-        rev_cagr5 = _cagr(pl["Sales"], 5)
+        rev_cagr3 = _cagr(sales, 3)
+        rev_cagr5 = _cagr(sales, 5)
 
+        # ---- EPS series (None-safe, keeps year alignment so CAGR indexing stays correct) ----
         adj_shares = derived.get("Adjusted Equity Shares in Cr")
+        net_profit = _series(pl, "Net profit", n_years)
         eps_cagr3 = eps_cagr5 = eps_latest = None
         if adj_shares:
-            eps_series = [np / sh for np, sh in zip(pl["Net profit"], adj_shares) if sh]
-            eps_cagr3 = _cagr(tuple(eps_series), 3)
-            eps_cagr5 = _cagr(tuple(eps_series), 5)
+            eps_series = tuple(
+                (np_ / sh) if (sh and np_ is not None) else None
+                for np_, sh in zip(net_profit, adj_shares)
+            )
+            eps_cagr3 = _cagr(eps_series, 3)
+            eps_cagr5 = _cagr(eps_series, 5)
             eps_latest = eps_series[-1] if eps_series else None
         else:
-            warnings.append("Couldn't find share count data — EPS-based metrics (EPS CAGR, P/E, PEG) skipped.")
+            warnings.append("Couldn't find share count data — EPS-based metrics skipped.")
 
-        equity = [e + r for e, r in zip(bs["Equity Share Capital"], bs["Reserves"])]
-        pat_latest = pl["Net profit"][-1]
-        roe = round(pat_latest / equity[-1] * 100, 2) if equity[-1] else None
+        # ---- Latest-year figures (all None-safe) ----
+        equity_capital = _series(bs, "Equity Share Capital", n_years)[-1]
+        reserves = _series(bs, "Reserves", n_years)[-1]
+        equity_latest = _safe_add(equity_capital, reserves)
 
-        ebit_latest = pl["Profit before tax"][-1] + pl["Interest"][-1]
-        capital_employed = equity[-1] + bs["Borrowings"][-1]
-        roce = round(ebit_latest / capital_employed * 100, 2) if capital_employed else None
+        pat_latest = net_profit[-1] if net_profit else None
+        pbt_latest = _series(pl, "Profit before tax", n_years)[-1]
+        interest_latest = _series(pl, "Interest", n_years)[-1]
+        borrowings_latest = _series(bs, "Borrowings", n_years)[-1]
+        cash_latest = _series(bs, "Cash & Bank", n_years)[-1]
 
-        de = round(bs["Borrowings"][-1] / equity[-1], 3) if equity[-1] else None
-        int_cov = round(ebit_latest / pl["Interest"][-1], 2) if pl["Interest"][-1] else None
+        roe = None
+        if pat_latest is not None and equity_latest:
+            roe = round(pat_latest / equity_latest * 100, 2)
+        else:
+            skipped.append("roe")
 
-        cfo_latest = cf["Cash from Operating Activity"][-1]
-        fcf_approx = None
-        if "Cash from Investing Activity" in cf:
-            fcf_approx = round(cfo_latest + cf["Cash from Investing Activity"][-1], 1)
+        ebit_latest = _safe_add(pbt_latest, interest_latest)
+        capital_employed = _safe_add(equity_latest, borrowings_latest)
+        roce = round(ebit_latest / capital_employed * 100, 2) if _safe_div(ebit_latest, capital_employed) is not None else None
+        if roce is None:
+            skipped.append("roce")
+
+        de = round(borrowings_latest / equity_latest, 3) if _safe_div(borrowings_latest, equity_latest) is not None else None
+        int_cov = round(ebit_latest / interest_latest, 2) if _safe_div(ebit_latest, interest_latest) is not None else None
+
+        cfo_latest = _series(cf, "Cash from Operating Activity", n_years)[-1]
+        investing_latest = _series(cf, "Cash from Investing Activity", n_years)[-1]
+        fcf_approx = _safe_add(cfo_latest, investing_latest)
+        if fcf_approx is not None:
             warnings.append("fcf is an approximation (CFO + Cash from Investing Activity), "
                              "not a true CFO-minus-capex calculation — this export doesn't "
                              "give a separate capex line.")
+        else:
+            skipped.append("fcf")
 
         qoq_rev = None
-        if q and "Sales" in q and len(q["Sales"]) >= 2 and q["Sales"][-2]:
-            qoq_rev = round((q["Sales"][-1] / q["Sales"][-2] - 1) * 100, 2)
+        if q:
+            q_sales = _series(q, "Sales", len(q.get("Sales", ())))
+            if len(q_sales) >= 2 and q_sales[-1] is not None and q_sales[-2]:
+                qoq_rev = round((q_sales[-1] / q_sales[-2] - 1) * 100, 2)
 
         margin_chg_bps = None
         if len(opm) >= 2 and opm[-1] is not None and opm[-2] is not None:
             margin_chg_bps = round((opm[-1] - opm[-2]) * 100, 1)
 
-        net_margin = round(pat_latest / pl["Sales"][-1] * 100, 2) if pl["Sales"][-1] else None
+        net_margin = None
+        if pat_latest is not None and sales[-1]:
+            net_margin = round(pat_latest / sales[-1] * 100, 2)
 
         pe = pb = ev_ebitda = div_yield = peg = None
         if eps_latest and current_price:
             pe = round(current_price / eps_latest, 2)
             if eps_cagr3 and eps_cagr3 > 0:
                 peg = round(pe / eps_cagr3, 2)
-        if adj_shares and current_price and equity[-1]:
-            bvps = equity[-1] / adj_shares[-1]
+        if adj_shares and current_price and equity_latest:
+            bvps = equity_latest / adj_shares[-1] if adj_shares[-1] else None
             pb = round(current_price / bvps, 2) if bvps else None
-        if market_cap and op_profit[-1]:
-            ev = market_cap + bs["Borrowings"][-1] - bs.get("Cash & Bank", [0] * n_years)[-1]
-            ev_ebitda = round(ev / op_profit[-1], 2)
-        if "Dividend Amount" in pl and market_cap:
-            div_yield = round(pl["Dividend Amount"][-1] / market_cap * 100, 3)
+        if market_cap and op_profit and op_profit[-1]:
+            ev = _safe_sub(_safe_add(market_cap, borrowings_latest), cash_latest)
+            ev_ebitda = round(ev / op_profit[-1], 2) if ev is not None else None
+        dividend_latest = _series(pl, "Dividend Amount", n_years)[-1]
+        if dividend_latest is not None and market_cap:
+            div_yield = round(dividend_latest / market_cap * 100, 3)
 
         fundamentals = {
-            "roe": roe, "roce": roce, "ebitdaMargin": round(opm[-1], 2) if opm[-1] is not None else None,
+            "roe": roe, "roce": roce,
+            "ebitdaMargin": round(opm[-1], 2) if opm and opm[-1] is not None else None,
             "marginChgBps": margin_chg_bps, "netMargin": net_margin,
             "revCagr3": rev_cagr3, "revCagr5": rev_cagr5,
             "epsCagr3": eps_cagr3, "epsCagr5": eps_cagr5, "qoqRev": qoq_rev,
@@ -177,8 +240,15 @@ def parse_screener_excel(file_bytes: bytes) -> dict:
         }
         valuation = {k: v for k, v in valuation.items() if v is not None}
 
-        warnings.append("Not available from this export — still need manual entry: "
-                         "promoterHold, promoterPledge, currentRatio, sectorPE, medianPE, fairValue, fcfYield")
+        if not fundamentals and not valuation:
+            return {"error": "Couldn't compute any metrics from this file — it may be missing "
+                              "too much data (e.g. a very newly listed company), or use a "
+                              "materially different layout (e.g. a bank's P&L structure)."}
+
+        always_missing = ["promoterHold", "promoterPledge", "currentRatio", "sectorPE", "medianPE", "fairValue", "fcfYield"]
+        all_missing = skipped + always_missing
+        warnings.append(f"Not available or couldn't be computed from this file — still need "
+                         f"manual entry: {', '.join(all_missing)}")
 
         return {
             "error": None,
@@ -188,7 +258,8 @@ def parse_screener_excel(file_bytes: bytes) -> dict:
             "warnings": warnings,
         }
 
-    except (KeyError, IndexError, TypeError) as e:
-        return {"error": f"This file's layout didn't match what was expected (missing or "
-                          f"differently-placed data: {e}). Screener occasionally changes "
-                          f"their export format — this parser may need updating."}
+    except Exception as e:
+        return {"error": f"Unexpected problem reading this file's data ({type(e).__name__}: {e}). "
+                          f"Screener occasionally changes their export format, or this may be a "
+                          f"company type (e.g. bank/NBFC) whose layout differs enough that this "
+                          f"parser needs updating for it."}
