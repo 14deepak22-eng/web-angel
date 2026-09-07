@@ -35,3 +35,33 @@ def find_token(tradingsymbol: str, exchange: str = "NSE") -> str:
             return row["token"]
     raise ValueError(f"Could not find symboltoken for {tradingsymbol} on {exchange}. "
                       f"Check the exact trading symbol format (usually SYMBOL-EQ for equities).")
+
+
+def search_symbols(query: str, exchange: str = "NSE", limit: int = 15) -> list:
+    """
+    Powers a type-ahead search box: returns matches where the query appears
+    in either the trading symbol (e.g. 'RELIANCE-EQ') or the company name
+    (e.g. 'Reliance Industries'), restricted to plain equity rows (instrumenttype
+    blank/EQ) so you don't get flooded with futures/options contracts for the
+    same underlying.
+    """
+    query = (query or "").strip().upper()
+    if len(query) < 2:
+        return []
+
+    master = _load_master()
+    results = []
+    for row in master:
+        if row.get("exch_seg") != exchange:
+            continue
+        if row.get("instrumenttype") not in (None, "", "EQ"):
+            continue
+        symbol = row.get("symbol", "")
+        name = row.get("name", "")
+        if not symbol.endswith("-EQ"):
+            continue
+        if query in symbol.upper() or query in name.upper():
+            results.append({"symbol": symbol, "name": name, "exchange": exchange})
+        if len(results) >= limit:
+            break
+    return results
