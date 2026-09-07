@@ -168,6 +168,27 @@
     border-radius:6px; font-size:12.5px; z-index:60; transition:opacity .2s, transform .2s; pointer-events:none;
   }
   .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+  .add-stock-modal{
+    position:fixed; inset:0; background:rgba(4,6,9,0.65); z-index:70;
+    display:flex; align-items:flex-start; justify-content:center; padding-top:12vh;
+  }
+  .add-stock-box{
+    background:var(--panel); border:1px solid var(--border); border-radius:8px;
+    padding:18px; width:min(480px, 92vw); max-height:70vh; display:flex; flex-direction:column;
+  }
+  #add-stock-search{
+    background:var(--panel-2); border:1px solid var(--border); color:var(--text);
+    border-radius:5px; padding:10px 12px; font-size:13.5px; width:100%; box-sizing:border-box;
+  }
+  #add-stock-search:focus{ outline:none; border-color:var(--accent); }
+  #add-stock-results{ overflow-y:auto; margin-top:8px; flex:1; }
+  .add-stock-item{
+    padding:9px 10px; border-radius:5px; cursor:pointer; display:flex; justify-content:space-between; gap:10px;
+  }
+  .add-stock-item:hover{ background:var(--panel-2); }
+  .add-stock-item .sym{ font-family:var(--font-mono); font-weight:600; font-size:12.5px; }
+  .add-stock-item .nm{ color:var(--muted); font-size:12px; text-align:right; }
+  .add-stock-empty{ color:var(--muted); font-size:12.5px; padding:14px 4px; text-align:center; }
   @media (max-width:720px){
     .grid2, .grid3{ grid-template-columns:1fr; }
     table{ display:block; overflow-x:auto; }
@@ -546,6 +567,69 @@ function showToast(msg){
   t._timer = setTimeout(()=>t.classList.remove('show'), 1600);
 }
 
+// ============================== ADD STOCK (search-as-you-type) ==============================
+let addStockSearchTimer = null;
+
+function openAddStockModal(){
+  const modal = document.getElementById('add-stock-modal');
+  const input = document.getElementById('add-stock-search');
+  modal.style.display = 'flex';
+  input.value = '';
+  document.getElementById('add-stock-results').innerHTML = '';
+  input.focus();
+}
+function closeAddStockModal(){
+  document.getElementById('add-stock-modal').style.display = 'none';
+}
+
+async function runAddStockSearch(query){
+  const resultsEl = document.getElementById('add-stock-results');
+  if(query.trim().length < 2){
+    resultsEl.innerHTML = '<div class="add-stock-empty">Keep typing — at least 2 characters</div>';
+    return;
+  }
+  resultsEl.innerHTML = '<div class="add-stock-empty">Searching...</div>';
+  try{
+    const data = await apiGet('/api/search-symbols?q='+encodeURIComponent(query));
+    const results = data.results || [];
+    if(results.length === 0){
+      resultsEl.innerHTML = '<div class="add-stock-empty">No matches on NSE for that.</div>';
+      return;
+    }
+    resultsEl.innerHTML = results.map(r => `
+      <div class="add-stock-item" data-symbol="${escapeHtml(r.symbol)}" data-name="${escapeHtml(r.name)}" data-exchange="${escapeHtml(r.exchange)}">
+        <span class="sym">${escapeHtml(r.symbol)}</span>
+        <span class="nm">${escapeHtml(r.name)}</span>
+      </div>
+    `).join('');
+    resultsEl.querySelectorAll('.add-stock-item').forEach(item => {
+      item.addEventListener('click', () => selectAddStockResult(item.dataset.symbol, item.dataset.name, item.dataset.exchange));
+    });
+  }catch(e){
+    resultsEl.innerHTML = '<div class="add-stock-empty">Search failed — check your connection.</div>';
+  }
+}
+
+async function selectAddStockResult(tradingsymbol, name, exchange){
+  const ticker = tradingsymbol.replace('-EQ', '').replace('-BE', '');
+  if(STATE.stocks.some(s => s.ticker === ticker)){
+    showToast('That stock is already on your list');
+    closeAddStockModal();
+    return;
+  }
+  try{
+    await apiPost('/api/stock/'+encodeURIComponent(ticker), { tradingsymbol, exchange, sector: '' });
+    closeAddStockModal();
+    await loadState();
+    UI.openDrawerId = ticker; UI.activeTab = 'fundamentals';
+    render(); renderDrawer(); openDrawer();
+    showToast('Added ' + name);
+  }catch(e){
+    showToast('Could not create stock');
+  }
+}
+
+
 // ============================== RENDER ==============================
 const root = document.getElementById('app-root');
 
@@ -657,6 +741,16 @@ function render(){
     <div class="overlay" id="overlay"></div>
     <div class="drawer" id="drawer"></div>
     <div class="drawer" id="settings-drawer" style="width:min(480px,96vw)"></div>
+    <div class="add-stock-modal" id="add-stock-modal" style="display:none;">
+      <div class="add-stock-box">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <h2 style="font-family:var(--font-head);font-size:16px;margin:0;">Add Stock</h2>
+          <button class="btn btn-ghost" id="add-stock-close">✕</button>
+        </div>
+        <input type="text" id="add-stock-search" placeholder="Type a company name or symbol, e.g. Reliance or INFY..." autocomplete="off">
+        <div id="add-stock-results"></div>
+      </div>
+    </div>
     <div class="toast" id="toast"></div>
   `;
 
@@ -670,19 +764,7 @@ function render(){
   root.querySelectorAll('tbody tr').forEach(tr => {
     tr.addEventListener('click', ()=>{ UI.openDrawerId = tr.dataset.id; UI.activeTab='fundamentals'; renderDrawer(); openDrawer(); });
   });
-  document.getElementById('btn-add').addEventListener('click', async ()=>{
-    const ticker = (prompt('Ticker (unique id, e.g. INFY)')||'').trim();
-    if(!ticker) return;
-    if(STATE.stocks.some(s=>s.ticker===ticker)){ showToast('That ticker already exists'); return; }
-    const tradingsymbol = (prompt('Angel One trading symbol (e.g. INFY-EQ)', ticker+'-EQ')||'').trim();
-    const exchange = (prompt('Exchange', 'NSE')||'NSE').trim();
-    try{
-      await apiPost('/api/stock/'+encodeURIComponent(ticker), { tradingsymbol, exchange, sector:'' });
-      await loadState();
-      UI.openDrawerId = ticker; UI.activeTab='fundamentals';
-      render(); renderDrawer(); openDrawer();
-    }catch(e){ showToast('Could not create stock'); }
-  });
+  document.getElementById('btn-add').addEventListener('click', openAddStockModal);
   document.getElementById('btn-settings').addEventListener('click', ()=>{ renderSettingsDrawer(); openSettingsDrawer(); });
   document.getElementById('btn-refresh').addEventListener('click', refreshAll);
   document.getElementById('btn-import-csv').addEventListener('click', ()=> document.getElementById('csv-file-input').click());
@@ -692,6 +774,15 @@ function render(){
     e.target.value = '';
   });
   document.getElementById('overlay').addEventListener('click', closeAllDrawers);
+  document.getElementById('add-stock-close').addEventListener('click', closeAddStockModal);
+  document.getElementById('add-stock-modal').addEventListener('click', (e) => {
+    if(e.target.id === 'add-stock-modal') closeAddStockModal();
+  });
+  document.getElementById('add-stock-search').addEventListener('input', (e) => {
+    clearTimeout(addStockSearchTimer);
+    const query = e.target.value;
+    addStockSearchTimer = setTimeout(() => runAddStockSearch(query), 250);
+  });
 }
 
 function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
