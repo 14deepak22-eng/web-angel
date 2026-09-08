@@ -91,3 +91,59 @@ def refresh_one(ticker: str) -> dict:
     except Exception as e:
         logger.exception("Failed refreshing %s", ticker)
         return {"error": str(e)}
+
+
+_fund_refresh_lock = threading.Lock()
+_last_fund_error = None
+_last_fund_run_at = None
+
+
+def get_fundamentals_status() -> dict:
+    return {"lastRunAt": _last_fund_run_at, "lastError": _last_fund_error}
+
+
+def refresh_fundamentals_all() -> dict:
+    """
+    Automated counterpart to the manual "Auto-fetch fundamentals" button —
+    runs Yahoo Finance fundamentals fetch for every stock in the DB, on a
+    schedule, so the ranked list fills in over time without needing anyone
+    to click a per-stock button. Fundamentals change slowly (quarterly at
+    most), so this runs far less often than the price refresh — no need to
+    hit Yahoo every 30 minutes for numbers that update every few months.
+    """
+    global _last_fund_error, _last_fund_run_at
+    import fundamentals_fetch
+    import time
+
+    if not _fund_refresh_lock.acquire(blocking=False):
+        return {"skipped": True, "reason": "A fundamentals refresh is already in progress"}
+
+    updated, failed = [], []
+    try:
+        for stock in db.list_stocks():
+            ticker = stock["ticker"]
+            try:
+                result = fundamentals_fetch.fetch_yahoo_fundamentals(stock["tradingsymbol"], stock["exchange"])
+                if result.get("error"):
+                    failed.append({"ticker": ticker, "error": result["error"]})
+                else:
+                    db.upsert_stock_manual(
+                        ticker,
+                        sector=result.get("sector") if not stock.get("sector") else None,
+                        fundamentals=result.get("fundamentals") or None,
+                        valuation=result.get("valuation") or None,
+                    )
+                    updated.append(ticker)
+            except Exception as e:
+                logger.exception("Failed fetching fundamentals for %s", ticker)
+                failed.append({"ticker": ticker, "error": str(e)})
+            time.sleep(2)  # be gentle with Yahoo's free, unofficial feed between requests
+        _last_fund_error = None
+    except Exception as e:
+        logger.exception("Fundamentals refresh failed")
+        _last_fund_error = str(e)
+    finally:
+        _last_fund_run_at = dt.datetime.now(dt.timezone.utc).isoformat()
+        _fund_refresh_lock.release()
+
+    return {"updated": updated, "failed": failed, "error": _last_fund_error, "at": _last_fund_run_at}
