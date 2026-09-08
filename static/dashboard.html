@@ -499,6 +499,19 @@ async function refreshAll(){
   UI.refreshing = false;
   await loadState();
 }
+async function loadNifty50Universe(){
+  showToast('Loading Nifty 50 — this runs in the background...');
+  try{
+    const result = await apiPost('/api/bulk-add-universe');
+    if(result.added && result.added.length > 0){
+      showToast('Added ' + result.added.length + ' new stocks — prices and fundamentals are filling in now');
+    } else {
+      showToast('All Nifty 50 stocks are already on your list');
+    }
+  }catch(e){ showToast('Could not load universe'); }
+  await loadState();
+}
+
 async function refreshOne(ticker){
   showToast('Refreshing '+ticker+'...');
   try{
@@ -687,6 +700,7 @@ function render(){
       <input type="file" id="csv-file-input" accept=".csv" style="display:none;">
       <button class="btn" id="btn-settings">Market &amp; Weights</button>
       <button class="btn btn-accent" id="btn-add">+ Add Stock</button>
+      <button class="btn" id="btn-load-universe">📥 Load Nifty 50</button>
       <a href="/logout" class="btn btn-ghost" style="text-decoration:none;">Log out</a>
     </div>
 
@@ -765,6 +779,7 @@ function render(){
     tr.addEventListener('click', ()=>{ UI.openDrawerId = tr.dataset.id; UI.activeTab='fundamentals'; renderDrawer(); openDrawer(); });
   });
   document.getElementById('btn-add').addEventListener('click', openAddStockModal);
+  document.getElementById('btn-load-universe').addEventListener('click', loadNifty50Universe);
   document.getElementById('btn-settings').addEventListener('click', ()=>{ renderSettingsDrawer(); openSettingsDrawer(); });
   document.getElementById('btn-refresh').addEventListener('click', refreshAll);
   document.getElementById('btn-import-csv').addEventListener('click', ()=> document.getElementById('csv-file-input').click());
