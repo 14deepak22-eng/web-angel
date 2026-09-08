@@ -7,21 +7,15 @@ sanity-check against Screener.in before trusting a number, and there are
 several fields (ROCE, promoter holding/pledge, true 3-year CAGR, margin
 *trend*) it simply cannot provide — those still need manual entry.
 
-NOTE: Yahoo Finance frequently blocks or rate-limits requests coming from
-cloud/datacenter IPs (Render, AWS, etc.) since they look like automated
-scraping. Using a browser-like session (custom User-Agent) below reduces
-how often this happens, though it can never be eliminated entirely on a
-free, unofficial data source — if it still fails, waiting a few minutes
-and retrying is often enough.
+IMPORTANT: don't pass yfinance a custom requests.Session (an earlier version
+of this file did, to send a browser-like User-Agent). Yahoo's ".info" endpoint
+needs a cookie + "crumb" token that yfinance negotiates internally on its own
+session — handing it a plain custom session bypasses that negotiation and
+causes a hard 401 Unauthorized on every request, which is worse than the
+rate-limiting this was meant to fix. Let yfinance manage its own session.
 """
-import requests
-import yfinance as yf
 
-_session = requests.Session()
-_session.headers.update({
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                  "(KHTML, like Gecko) Chrome/120.0 Safari/537.36",
-})
+import yfinance as yf
 
 
 def fetch_yahoo_fundamentals(tradingsymbol: str, exchange: str = "NSE") -> dict:
@@ -37,16 +31,18 @@ def fetch_yahoo_fundamentals(tradingsymbol: str, exchange: str = "NSE") -> dict:
     fundamentals = {}
     valuation = {}
     try:
-        info = yf.Ticker(yahoo_symbol, session=_session).info
+        info = yf.Ticker(yahoo_symbol).info
     except Exception as e:
-        return {"error": f"Could not reach Yahoo Finance for {yahoo_symbol}: {type(e).__name__}: {e}"}
+        return {"error": f"Could not reach Yahoo Finance for {yahoo_symbol}: {type(e).__name__}: {e}. "
+                          f"This is often Yahoo temporarily rate-limiting or blocking this server — "
+                          f"try again in a few minutes."}
 
     if not info or info.get("regularMarketPrice") is None:
         return {"error": f"No data returned for {yahoo_symbol} — this is usually Yahoo "
-                          f"temporarily rate-limiting the server rather than a wrong symbol "
-                          f"(we confirmed this symbol is valid). Wait a few minutes and try "
-                          f"again; if it keeps failing for every stock, not just this one, "
-                          f"Yahoo may be blocking this server's IP for now."}
+                          f"temporarily rate-limiting the server rather than a wrong symbol. "
+                          f"Wait a few minutes and try again; if it keeps failing for every "
+                          f"stock, not just this one, Yahoo may be blocking this server's IP "
+                          f"for now (this is a known limitation of the free, unofficial feed)."}
 
     def pct(x):
         """Yahoo often returns ratios as decimals (0.15 = 15%) — convert to our whole-number-percent convention."""
