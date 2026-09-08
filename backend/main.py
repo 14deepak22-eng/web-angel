@@ -20,6 +20,8 @@ import fundamentals_fetch
 import screener_csv_import
 import screener_excel_import
 import instruments
+import nifty50
+import threading
 
 import math
 
@@ -239,6 +241,35 @@ async def api_import_screener_excel(ticker: str, file: UploadFile = File(...), _
 def api_search_symbols(q: str = "", _: None = Depends(auth.require_login)):
     """Type-ahead search for the Add Stock box — searches Angel One's instrument list."""
     return {"results": instruments.search_symbols(q)}
+
+
+@app.post("/api/bulk-add-universe")
+def api_bulk_add_universe(_: None = Depends(auth.require_login)):
+    """
+    Adds every Nifty 50 stock not already on your list, then kicks off a
+    background refresh so prices/technicals start filling in immediately
+    rather than waiting for the next scheduled cycle. Returns right away —
+    check /api/state a little later (or just watch the dashboard) to see
+    stocks appear.
+    """
+    existing = {s["ticker"] for s in db.list_stocks()}
+    added = []
+    for symbol in nifty50.NIFTY50_SYMBOLS:
+        if symbol in existing:
+            continue
+        db.upsert_stock_manual(symbol, tradingsymbol=f"{symbol}-EQ", exchange="NSE", sector="")
+        added.append(symbol)
+
+    if added:
+        threading.Thread(target=refresh_service.refresh_all, daemon=True).start()
+        threading.Thread(target=refresh_service.refresh_fundamentals_all, daemon=True).start()
+
+    return {"ok": True, "added": added, "alreadyPresent": len(existing)}
+
+
+@app.get("/api/fundamentals-status")
+def api_fundamentals_status(_: None = Depends(auth.require_login)):
+    return refresh_service.get_fundamentals_status()
 
 
 @app.get("/api/health")
